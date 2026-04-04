@@ -54,7 +54,8 @@ export const login = async (credentials) => {
       user
     };
   } else {
-    throw new Error("Credenciales inválidas. Use kurao123 como contraseña.");
+    // Aquí está la mejora del mensaje de error
+    throw new Error("Correo electrónico o contraseña incorrectos.");
   }
 };
 
