@@ -117,12 +117,10 @@ const STYLES = `
     gap: 10px;
   }
 
-  /* NUEVO: TABLETS (Colapsar a 1 columna y reacomodar los accesos rápidos) */
   @media (max-width: 1100px) {
     .dash-main-grid {
       grid-template-columns: 1fr;
     }
-    /* En tablet aprovechamos el ancho completo acomodándolos en grilla */
     .quick-links-container {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -130,7 +128,6 @@ const STYLES = `
     }
   }
 
-  /* CELULARES */
   @media (max-width: 768px) {
     .dash-root {
       padding-top: 72px !important; 
@@ -149,7 +146,6 @@ const STYLES = `
     th, td {
       padding: 12px 16px !important;
     }
-    /* En celular volvemos a ponerlos en forma de lista hacia abajo */
     .quick-links-container {
       display: flex;
       flex-direction: column;
@@ -249,7 +245,8 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const QuickLink = ({ to, icon: Icon, label, accent = '#1047A9', onClick }) => {
+// MODIFICACIÓN AQUI: Se agregó la propiedad `state` para pasar datos entre rutas
+const QuickLink = ({ to, icon: Icon, label, accent = '#1047A9', onClick, state }) => {
   const content = (
     <div
       className="quick-link"
@@ -279,7 +276,8 @@ const QuickLink = ({ to, icon: Icon, label, accent = '#1047A9', onClick }) => {
   );
 
   if (onClick) return <div onClick={onClick}>{content}</div>;
-  return <Link to={to} style={{ textDecoration: 'none' }}>{content}</Link>;
+  // MODIFICACIÓN AQUI: Pasar el state al componente Link
+  return <Link to={to} state={state} style={{ textDecoration: 'none' }}>{content}</Link>;
 };
 
 const SkeletonLoader = () => (
@@ -622,7 +620,8 @@ const DashboardPage = () => {
               ) : (
                 <>
                   {(isAdmin || isReception) && (
-                    <QuickLink to="/patients/new"    icon={Plus}         label="Nuevo Paciente"  />
+                    /* MODIFICACIÓN AQUI: Le decimos a React Router que envíe esta variable de estado al destino */
+                    <QuickLink to="/patients" state={{ openNewPatient: true }} icon={Plus} label="Nuevo Paciente"  />
                   )}
                   <QuickLink to="/appointments"      icon={Calendar}     label="Agendar Cita"    />
                   <QuickLink to="/patients"          icon={Users}        label="Ver Pacientes"   />

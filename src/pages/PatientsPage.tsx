@@ -7,7 +7,8 @@ import {
   Users, UserCheck, UserX, Calendar,
   Droplets, Activity, Heart, ShieldCheck, FileText
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+// MODIFICACIÓN AQUI: Importar useLocation y useNavigate
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 
 /* ── Estilos Globales e Inyectados ── */
@@ -118,6 +119,10 @@ const SectionDivider = ({ icon: Icon, label }) => (
    COMPONENTE PRINCIPAL
    ════════════════════════════════════ */
 const PatientsPage = () => {
+  // MODIFICACIÓN AQUI: Instanciar location y navigate
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilter] = useState('Todos');
@@ -129,7 +134,7 @@ const PatientsPage = () => {
     nombre:'', apellidos:'', fechaNacimiento:'', sexo:'Masculino', curp:'', ocupacion:'',
     telefono:'', email:'', direccion:'', contactoEmergencia:'', telEmergencia:'',
     tipoSangre:'O+', alergias:'', antecedentes:'', medicamentos:'',
-    peso:'', talla:'', presion:'', temp:'',
+    peso:'', altura:'', presion:'', temp:'',
     aseguradora:'', numPoliza:''
   };
   const [form, setForm] = useState(initialForm);
@@ -163,6 +168,15 @@ const PatientsPage = () => {
   };
 
   const setField = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  // MODIFICACIÓN AQUI: Capturamos el estado enviado por la página Dashboard para abrir el modal
+  useEffect(() => {
+    if (location.state?.openNewPatient) {
+      openAddPanel();
+      // Limpiamos el estado en el historial para que si recargamos la página (F5) no se vuelva a abrir automáticamente
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   // Datos de ejemplo ampliados para probar paginación
   const mock = data?.patients || [
@@ -308,7 +322,7 @@ const PatientsPage = () => {
                   <SectionDivider icon={Activity} label="Triaje / Signos Vitales" />
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12 }}>
                     <Field label="Peso (kg)"><input className="pts-input-focus" name="peso" value={form.peso} onChange={setField} style={inputBase} placeholder="0.0" /></Field>
-                    <Field label="Talla (cm)"><input className="pts-input-focus" name="talla" value={form.talla} onChange={setField} style={inputBase} placeholder="0" /></Field>
+                    <Field label="Altura (cm)"><input className="pts-input-focus" name="altura" value={form.altura} onChange={setField} style={inputBase} placeholder="0" /></Field>
                     <Field label="Presión Art."><input className="pts-input-focus" name="presion" value={form.presion} onChange={setField} style={inputBase} placeholder="120/80" /></Field>
                     <Field label="Temp (°C)"><input className="pts-input-focus" name="temp" value={form.temp} onChange={setField} style={inputBase} placeholder="36.5" /></Field>
                   </div>
