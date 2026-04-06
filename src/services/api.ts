@@ -7,7 +7,7 @@ const MOCK_USER = {
 };
 
 const MOCK_STATS = {
-  totalPatients: 1250,
+  totalPatients: 6,
   appointmentsToday: 45,
   activeDoctors: 28,
   pendingAppointments: 12,
