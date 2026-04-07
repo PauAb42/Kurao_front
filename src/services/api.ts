@@ -46,11 +46,6 @@ const MOCK_PATIENTS = [
   },
 ];
 
-const MOCK_APPOINTMENTS = [
-  { id: 1, paciente: "Juan Pérez", medico: "Dr. Smith", fecha: "2024-03-20", hora: "10:00 AM", estado: "Completada", motivo: "Chequeo de rutina" },
-  { id: 2, paciente: "María García", medico: "Dra. Jones", fecha: "2024-03-20", hora: "11:30 AM", estado: "Programada", motivo: "Seguimiento de asma" },
-];
-
 // LISTADO DE 12 DOCTORES CON INFORMACIÓN COMPLETA
 const MOCK_DOCTORS = [
   { id: 1, nombre: "Elena", apellidos: "García", especialidad: "Cardiología", cedula: "7723144", email: "elena.garcia@kurao.com", telefono: "555-0101", consultorio: "A-102", horarioInicio: "08:00", horarioFin: "16:00", estado: "Activo" },
@@ -68,9 +63,9 @@ const MOCK_DOCTORS = [
 ];
 
 // --- AUTH ---
-export const login = async (credentials) => {
+export const login = async (credentials: any) => {
   await new Promise(resolve => setTimeout(resolve, 800));
-  const users = {
+  const users: any = {
     'admin@kurao.com': { id: '1', name: 'Admin Kurao', email: 'admin@kurao.com', role: 'admin' },
     'paciente@kurao.com': { id: '2', name: 'Juan Pérez', email: 'paciente@kurao.com', role: 'patient', age: 45, gender: 'M' },
     'doctor@kurao.com': { id: '3', name: 'Dra. Elena García', email: 'doctor@kurao.com', role: 'doctor', specialty: 'Cardiología' },
@@ -84,7 +79,7 @@ export const login = async (credentials) => {
   }
 };
 
-export const updateProfile = async (id, data) => {
+export const updateProfile = async (id: string | number, data: any) => {
   await new Promise(resolve => setTimeout(resolve, 500));
   return { id, ...data };
 };
@@ -111,22 +106,22 @@ export const getPatients = async (page = 1, limit = 10, search = "") => {
   };
 };
 
-export const getPatientById = async (id) => {
+export const getPatientById = async (id: string | number) => {
     await new Promise(resolve => setTimeout(resolve, 300));
     return MOCK_PATIENTS.find(p => p.id === Number(id)) || MOCK_PATIENTS[0];
 };
 
-export const createPatient = async (data) => {
+export const createPatient = async (data: any) => {
     await new Promise(resolve => setTimeout(resolve, 500));
     return { id: Math.random(), ...data };
 };
 
-export const updatePatient = async (id, data) => {
+export const updatePatient = async (id: string | number, data: any) => {
     await new Promise(resolve => setTimeout(resolve, 500));
     return { id, ...data };
 };
 
-export const deletePatient = async (id) => {
+export const deletePatient = async (id: string | number) => {
     await new Promise(resolve => setTimeout(resolve, 500));
     return { success: true };
 };
@@ -137,31 +132,85 @@ export const getDoctors = async () => {
     return MOCK_DOCTORS;
 };
 
-export const getDoctorById = async (id) => {
+export const getDoctorById = async (id: string | number) => {
     await new Promise(resolve => setTimeout(resolve, 300));
     const doctor = MOCK_DOCTORS.find(d => d.id === Number(id));
     return doctor || MOCK_DOCTORS[0];
 };
 
-export const createDoctor = async (data) => ({ id: Math.random(), ...data });
-export const updateDoctor = async (id, data) => ({ id, ...data });
-export const deleteDoctor = async (id) => ({ success: true });
+export const createDoctor = async (data: any) => ({ id: Math.random(), ...data });
+export const updateDoctor = async (id: string | number, data: any) => ({ id, ...data });
+export const deleteDoctor = async (id: string | number) => ({ success: true });
 
 // --- CITAS ---
-export const getAppointments = async (filters = {}) => {
+// Usamos let para poder modificar el arreglo simulando una base de datos
+let MOCK_APPOINTMENTS = [
+  { id: 'FOL-101', paciente: "Juan Pérez", medico: "Dra. Elena García", fecha: "2024-03-20", hora: "09:00 AM", estado: "Completada", motivo: "Chequeo de rutina" },
+  { id: 'FOL-102', paciente: "María García", medico: "Dr. Ricardo Martínez", fecha: "2024-03-20", hora: "11:30 AM", estado: "Programada", motivo: "Seguimiento de asma" },
+  { id: 'FOL-103', paciente: "Carlos López", medico: "Dra. Elena García", fecha: "2024-03-21", hora: "10:15 AM", estado: "Cancelada", motivo: "Dolor en el pecho" },
+  { id: 'FOL-104', paciente: "Ana Beltrán", medico: "Dr. Roberto Solis", fecha: "2024-03-22", hora: "16:00", estado: "Programada", motivo: "Dolor articular" },
+  { id: 'FOL-105', paciente: "Juan Pérez", medico: "Dra. Adriana Torres", fecha: "2024-03-25", hora: "12:00", estado: "Programada", motivo: "Consulta de seguimiento" },
+];
+
+export const getAppointments = async (filters: any = {}) => {
   await new Promise(resolve => setTimeout(resolve, 500));
-  const result = [...MOCK_APPOINTMENTS] as any;
+  
+  let filtered = [...MOCK_APPOINTMENTS];
+  
+  // Filtrar por estado
+  if (filters.status && filters.status !== 'all') {
+    filtered = filtered.filter(a => a.estado === filters.status);
+  }
+  
+  // Filtrar por doctor (para la vista de detalle de doctor)
+  if (filters.doctorId) {
+      const doctor = MOCK_DOCTORS.find(d => d.id === Number(filters.doctorId));
+      if (doctor) {
+          filtered = filtered.filter(a => a.medico.includes(doctor.apellidos));
+      }
+  }
+
+  // Truco de compatibilidad
+  const result: any = [...filtered];
   result.appointments = result; 
   return result;
 };
 
-export const getAppointmentById = async (id) => MOCK_APPOINTMENTS[0];
-export const createAppointment = async (data) => ({ id: Math.random(), ...data });
-export const updateAppointment = async (id, data) => ({ id, ...data });
-export const cancelAppointment = async (id) => ({ success: true });
+export const getAppointmentById = async (id: string | number) => {
+    return MOCK_APPOINTMENTS.find(a => a.id === id) || MOCK_APPOINTMENTS[0];
+};
+
+export const createAppointment = async (data: any) => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const newApt = {
+        id: `FOL-${100 + MOCK_APPOINTMENTS.length + 1}`,
+        ...data,
+        estado: 'Programada'
+    };
+    MOCK_APPOINTMENTS = [newApt, ...MOCK_APPOINTMENTS];
+    return newApt;
+};
+
+export const updateAppointment = async (id: string | number, data: any) => ({ id, ...data });
+
+export const cancelAppointment = async (id: string | number) => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    MOCK_APPOINTMENTS = MOCK_APPOINTMENTS.map(apt => 
+        apt.id === id ? { ...apt, estado: 'Cancelada' } : apt
+    );
+    return { success: true };
+};
+
+export const completeAppointment = async (id: string | number) => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    MOCK_APPOINTMENTS = MOCK_APPOINTMENTS.map(apt => 
+        apt.id === id ? { ...apt, estado: 'Completada' } : apt
+    );
+    return { success: true };
+};
 
 // --- HISTORIAL CLÍNICO ---
-export const getMedicalHistory = async (patientId) => {
+export const getMedicalHistory = async (patientId: string | number) => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const history = [
         { id: 1, fecha: '10 Mar 2024', hora: '10:00 AM', medico: 'Dra. Elena García', especialidad: 'Cardiología', diagnostico: 'Faringitis aguda con inflamación severa.', tratamiento: 'Amoxicilina 500mg c/8h por 7 días, Paracetamol 500mg c/6h.', medicamentos: 'Amoxicilina, Paracetamol', observaciones: 'Paciente refiere dolor al tragar desde hace 48h.', notas: 'Cultivo faríngeo positivo. Sin complicaciones.' },
@@ -171,4 +220,4 @@ export const getMedicalHistory = async (patientId) => {
     return history;
 };
 
-export const createMedicalRecord = async (patientId, data) => ({ id: Math.random(), ...data });
+export const createMedicalRecord = async (patientId: string | number, data: any) => ({ id: Math.random(), ...data });
