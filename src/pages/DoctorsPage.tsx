@@ -1,255 +1,334 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApi } from '../hooks/useApi';
-import { getDoctors, deleteDoctor } from '../services/api';
-import { 
-  Search, 
-  Plus, 
-  Eye, 
-  Pencil, 
-  Trash2, 
-  ChevronLeft, 
-  ChevronRight,
-  Stethoscope,
-  X,
-  AlertCircle
+import { getDoctors, deleteDoctor, createDoctor, updateDoctor } from '../services/api';
+import {
+  Search, Plus, Eye, Pencil, Trash2,
+  ChevronLeft, ChevronRight, AlertCircle, X,
+  Stethoscope, UserCheck, UserX, Calendar,
+  Clock, Mail, Phone, Award, Shield
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 
+/* ── Estilos Globales e Inyectados ── */
+const STYLES = `
+  .doc-root * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
+  .doc-row { transition: background .13s; }
+  .doc-row:hover { background: #F4F7FB; }
+  .doc-btn { 
+    transition: transform .15s, background .15s; 
+    border: none; 
+    cursor: pointer;
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+  }
+  .doc-btn:hover { transform: scale(1.1); }
+  .doc-input-focus:focus { 
+    border-color: #1047A9 !important; 
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(16,71,169,.1); 
+  }
+  .doc-add-btn { transition: all .18s; }
+  .doc-add-btn:hover { 
+    background: #1047A9 !important; 
+    color: #fff !important;
+    box-shadow: 0 4px 16px rgba(16,71,169,.28) !important; 
+  }
+  .doc-scroll::-webkit-scrollbar { width: 6px; }
+  .doc-scroll::-webkit-scrollbar-thumb { background: #DDE6F0; border-radius: 10px; }
+`;
+
+if (typeof document !== 'undefined' && !document.getElementById('doc-styles-v2')) {
+  const el = document.createElement('style');
+  el.id = 'doc-styles-v2'; el.textContent = STYLES;
+  document.head.appendChild(el);
+}
+
+/* ── Sub-componentes Visuales ── */
+const StatusDot = ({ active }) => (
+  <span style={{
+    display:'inline-flex', alignItems:'center', gap:5,
+    background: active ? '#D1FAE5' : '#FEE2E2',
+    color: active ? '#065F46' : '#DC2626',
+    fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:20,
+  }}>
+    <span style={{ width:6, height:6, borderRadius:'50%', background: active ? '#10B981' : '#EF4444' }} />
+    {active ? 'Disponible' : 'Fuera de Turno'}
+  </span>
+);
+
+const MiniStat = ({ icon: Icon, label, value, bg, color, delay }) => (
+  <motion.div
+    initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
+    transition={{ delay, duration:.36, ease:[.22,1,.36,1] }}
+    style={{ background:'#fff', borderRadius:14, border:'1.5px solid #DDE6F0',
+             padding:'16px 18px', display:'flex', alignItems:'center', gap:12,
+             position:'relative', overflow:'hidden' }}
+  >
+    <div style={{ position:'absolute', top:-12, right:-12, width:56, height:56,
+                  borderRadius:'50%', background:bg, opacity:.45 }} />
+    <div style={{ width:40, height:40, borderRadius:11, background:bg, color,
+                  display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+      <Icon size={18} />
+    </div>
+    <div>
+      <p style={{ fontSize:10, fontWeight:700, color:'#4E6B8C', textTransform:'uppercase', letterSpacing:'.5px' }}>{label}</p>
+      <p style={{ fontSize:22, fontWeight:800, color:'#0B1F3A', lineHeight:1.1 }}>{value}</p>
+    </div>
+  </motion.div>
+);
+
+const inputBase = {
+  width:'100%', borderRadius:11, border:'1.5px solid #DDE6F0',
+  padding:'10px 13px', fontSize:13, color:'#0B1F3A',
+  background:'#FAFBFD', fontFamily:'DM Sans, sans-serif',
+};
+
+const Field = ({ label, required, children, span = 1 }) => (
+  <div style={{ display:'flex', flexDirection:'column', gap:5, gridColumn: `span ${span}` }}>
+    <label style={{ fontSize:10, fontWeight:800, color:'#4E6B8C', textTransform:'uppercase', letterSpacing:'.5px' }}>
+      {label}{required && <span style={{ color:'#EF4444', marginLeft:2 }}>*</span>}
+    </label>
+    {children}
+  </div>
+);
+
+const SectionDivider = ({ icon: Icon, label }) => (
+  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16, marginTop:8 }}>
+    <div style={{ width:30, height:30, borderRadius:8, background:'rgba(16,71,169,0.08)', color:'#1047A9', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      {Icon && <Icon size={14} />}
+    </div>
+    <span style={{ fontSize:11, fontWeight:800, color:'#1047A9', textTransform:'uppercase', letterSpacing:'.8px', whiteSpace:'nowrap' }}>{label}</span>
+    <div style={{ flex:1, height:1, background:'#DDE6F0' }} />
+  </div>
+);
+
 const DoctorsPage = () => {
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'table'
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(null);
+  // Integración con el Hook de API - Aseguramos que inicie como array vacío
+  const { data, loading, error, refresh } = useApi(getDoctors);
+  const doctors = Array.isArray(data) ? data : [];
+  
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [filterSpecialty, setFilter] = useState('Todas');
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [delTarget, setDelTarget] = useState(null);
+  
+  const initialForm = {
+    nombre:'', apellidos:'', especialidad:'Medicina General', cedula:'', 
+    email:'', telefono:'', consultorio:'', 
+    horarioInicio:'09:00', horarioFin:'18:00', estado:'Activo'
+  };
+  const [form, setForm] = useState(initialForm);
 
-  const { data, loading, error, refetch } = useApi(getDoctors);
+  const ITEMS_PER_PAGE = 10;
 
-  const doctors = data || [
-    { id: 1, nombre: 'Elena', apellidos: 'García', especialidad: 'Cardiología', cedula: '1234567', email: 'elena.garcia@kurao.com', estado: 'Activo' },
-    { id: 2, nombre: 'Ricardo', apellidos: 'Martínez', especialidad: 'Pediatría', cedula: '7654321', email: 'ricardo.mtz@kurao.com', estado: 'Activo' },
-    { id: 3, nombre: 'Sofía', apellidos: 'Sánchez', especialidad: 'Dermatología', cedula: '9876543', email: 'sofia.sanchez@kurao.com', estado: 'Inactivo' },
-    { id: 4, nombre: 'Miguel', apellidos: 'Hernández', especialidad: 'Neurología', cedula: '4567890', email: 'miguel.hdz@kurao.com', estado: 'Activo' },
-  ];
+  // Lógica de Filtrado con validación de seguridad
+  const filtered = useMemo(() => {
+    if (!doctors) return [];
+    return doctors.filter(d => {
+      const q = search.toLowerCase();
+      const name = d.nombre || '';
+      const last = d.apellidos || '';
+      const spec = d.especialidad || '';
+      const idCard = d.cedula || '';
+      
+      const fullName = `${name} ${last}`.toLowerCase();
+      const matchesSearch = (
+        fullName.includes(q) || 
+        spec.toLowerCase().includes(q) || 
+        idCard.includes(q)
+      );
+      const matchesFilter = filterSpecialty === 'Todas' || d.especialidad === filterSpecialty;
+      return matchesSearch && matchesFilter;
+    });
+  }, [doctors, search, filterSpecialty]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+  const paginatedData = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  const openAddPanel = () => { setForm(initialForm); setIsEditing(false); setPanelOpen(true); };
+  const openEditPanel = (d) => { setForm({...d}); setIsEditing(true); setPanelOpen(true); };
+  const setField = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleDelete = async () => {
+    if (!delTarget) return;
+    try {
+      await deleteDoctor(delTarget.id);
+      refresh(); 
+      setDelTarget(null);
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="doc-root" style={{ display:'flex', flexDirection:'column', gap:22 }}>
+
+      {/* ── FILA SUPERIOR ── */}
+      <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">Médicos</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">Directorio de especialistas y personal médico</p>
+            <h1 style={{ fontSize:22, fontWeight:800, color:'#0B1F3A', margin:0 }}>Directorio Médico</h1>
+            <p style={{ fontSize:13, color:'#4E6B8C' }}>Gestión de especialistas y horarios de atención</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-6 py-3 font-bold text-white shadow-lg transition-all hover:bg-[var(--color-primary-dark)] active:scale-95"
+        <button className="doc-add-btn" onClick={openAddPanel}
+          style={{ display:'flex', alignItems:'center', gap:8, background:'#fff', border:'2px solid #1047A9', borderRadius:999, padding:'10px 22px', color:'#1047A9', fontSize:13, fontWeight:700, cursor:'pointer' }}
         >
-          <Plus size={20} />
-          Nuevo Médico
+          <Plus size={15} strokeWidth={2.6} /> Nuevo Especialista
         </button>
+      </motion.div>
+
+      {/* ── ESTADÍSTICAS ── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:14 }}>
+        <MiniStat icon={Stethoscope} label="Total Médicos" value={doctors.length} bg="#EEF3FA" color="#1047A9" delay={.07} />
+        <MiniStat icon={UserCheck} label="En Turno" value={doctors.filter(d=>d.estado==='Activo').length} bg="#D1FAF3" color="#00A88D" delay={.13} />
+        <MiniStat icon={Award} label="Especialidades" value={[...new Set(doctors.map(d => d.especialidad))].length} bg="#FEF3C7" color="#D97706" delay={.19} />
+        <MiniStat icon={Calendar} label="Consultas Hoy" value="--" bg="#F3E8FF" color="#7C3AED" delay={.25} />
       </div>
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" size={18} />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, especialidad o cédula..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-2.5 pl-10 pr-4 text-sm outline-none focus:border-[var(--color-primary)] shadow-sm"
-          />
+      {/* ── TABLA DE MÉDICOS ── */}
+      <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} style={{ background:'#fff', borderRadius:18, border:'1.5px solid #DDE6F0', overflow:'hidden' }}>
+        <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:12, padding:'16px 20px', borderBottom:'1.5px solid #DDE6F0' }}>
+          <div style={{ position:'relative', flex:1, minWidth:200 }}>
+            <Search size={14} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'#4E6B8C' }} />
+            <input className="doc-input-focus" type="text" placeholder="Buscar por nombre, especialidad o cédula..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ ...inputBase, paddingLeft:36, background:'#F5F8FC' }} />
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            {['Todas','Cardiología','Pediatría','Neurología'].map(s => (
+              <button key={s} onClick={() => { setFilter(s); setPage(1); }} style={{ padding:'7px 14px', borderRadius:999, fontSize:12, fontWeight:700, border: filterSpecialty===s ? 'none' : '1.5px solid #DDE6F0', background: filterSpecialty===s ? '#1047A9' : 'transparent', color: filterSpecialty===s ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{s}</button>
+            ))}
+          </div>
         </div>
-        <div className="flex rounded-xl bg-[var(--color-surface)] p-1 shadow-sm border border-[var(--color-border)]">
-          <button 
-            onClick={() => setViewMode('grid')}
-            className={`rounded-lg px-4 py-2 text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:bg-gray-100'}`}
-          >
-            Grid
-          </button>
-          <button 
-            onClick={() => setViewMode('table')}
-            className={`rounded-lg px-4 py-2 text-xs font-bold transition-all ${viewMode === 'table' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:bg-gray-100'}`}
-          >
-            Tabla
-          </button>
-        </div>
-      </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 animate-pulse">
-          {[1,2,3,4].map(i => <div key={i} className="h-64 rounded-2xl bg-white border border-[var(--color-border)]" />)}
-        </div>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {doctors.map((doctor) => (
-            <motion.div 
-              key={doctor.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="group relative rounded-2xl bg-[var(--color-surface)] p-6 shadow-sm border border-[var(--color-border)] transition-all hover:shadow-md"
-            >
-              <div className="mb-4 flex justify-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-blue-50 text-[var(--color-primary)] font-bold text-2xl group-hover:bg-[var(--color-primary)] group-hover:text-white transition-colors">
-                  {(doctor.nombre?.charAt(0) || '')}{(doctor.apellidos?.charAt(0) || '')}
-                </div>
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-bold text-[var(--color-text)]">Dr. {doctor.nombre} {doctor.apellidos}</h3>
-                <p className="text-sm font-semibold text-[var(--color-primary)]">{doctor.especialidad}</p>
-                <p className="mt-1 text-xs text-[var(--color-text-muted)]">Cédula: {doctor.cedula}</p>
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
-                    doctor.estado === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {doctor.estado}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-6 flex justify-center gap-3 border-t border-[var(--color-border)] pt-4">
-                <Link to={`/doctors/${doctor.id}`} className="text-[var(--color-text-muted)] hover:text-[var(--color-primary)]"><Eye size={18} /></Link>
-                <button className="text-[var(--color-text-muted)] hover:text-[var(--color-primary)]"><Pencil size={18} /></button>
-                <button onClick={() => setConfirmDelete(doctor)} className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"><Trash2 size={18} /></button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-2xl bg-[var(--color-surface)] p-6 shadow-sm border border-[var(--color-border)] overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-[var(--color-border)] text-xs font-bold uppercase text-[var(--color-text-muted)]">
-                <th className="pb-4 pl-4">Médico</th>
-                <th className="pb-4">Especialidad</th>
-                <th className="pb-4">Cédula</th>
-                <th className="pb-4">Email</th>
-                <th className="pb-4">Estado</th>
-                <th className="pb-4 text-right pr-4">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {doctors.map((doctor) => (
-                <tr key={doctor.id} className="text-sm transition-colors hover:bg-gray-50">
-                  <td className="py-4 pl-4 font-medium">Dr. {doctor.nombre} {doctor.apellidos}</td>
-                  <td className="py-4 text-[var(--color-primary)] font-semibold">{doctor.especialidad}</td>
-                  <td className="py-4 font-mono">{doctor.cedula}</td>
-                  <td className="py-4">{doctor.email}</td>
-                  <td className="py-4">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${
-                      doctor.estado === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                    }`}>
-                      {doctor.estado}
-                    </span>
-                  </td>
-                  <td className="py-4 text-right pr-4">
-                    <div className="flex justify-end gap-2">
-                      <Link to={`/doctors/${doctor.id}`} className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-[var(--color-primary)] hover:bg-blue-100"><Eye size={16} /></Link>
-                      <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100"><Pencil size={16} /></button>
-                      <button onClick={() => setConfirmDelete(doctor)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-[var(--color-danger)] hover:bg-red-100"><Trash2 size={16} /></button>
-                    </div>
-                  </td>
+        <div style={{ overflowX:'auto', minHeight: 200 }}>
+          {loading ? (
+             <div style={{ padding: 40, textAlign: 'center', color: '#4E6B8C' }}>Cargando directorio...</div>
+          ) : (
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ background:'#FAFBFD', borderBottom:'1.5px solid #DDE6F0' }}>
+                  {['Especialista','Cédula','Especialidad','Consultorio','Estado','Acciones'].map((h,i) => (
+                    <th key={i} style={{ padding:'12px 16px', textAlign: i===5 ? 'center' : 'left', fontSize:10, fontWeight:800, color:'#4E6B8C', letterSpacing:'.6px', textTransform:'uppercase' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedData.length > 0 ? (
+                  paginatedData.map((d, idx) => (
+                    <motion.tr key={d.id} className="doc-row" initial={{ opacity:0, x:-8 }} animate={{ opacity:1, x:0 }} transition={{ delay: idx * 0.03 }} style={{ borderBottom:'1px solid #EEF3FA' }}>
+                      <td style={{ padding:'12px 16px' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                            <div style={{ width:34, height:34, borderRadius:10, background:'#1047A9', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800 }}>{(d.nombre?.[0] || 'D')}{(d.apellidos?.[0] || 'O')}</div>
+                            <div>
+                                <div style={{ fontWeight:700, color:'#0B1F3A', fontSize:13 }}>Dr. {d.nombre} {d.apellidos}</div>
+                                <div style={{ fontSize:11, color:'#4E6B8C' }}>{d.email}</div>
+                            </div>
+                        </div>
+                      </td>
+                      <td style={{ padding:'12px 16px' }}><span style={{ fontFamily:'monospace', fontSize:11, fontWeight:800, color:'#1047A9', background:'#EEF3FA', padding:'2px 8px', borderRadius:6 }}>{d.cedula}</span></td>
+                      <td style={{ padding:'12px 16px' }}><span style={{ fontSize:12, fontWeight:600, color:'#0B1F3A' }}>{d.especialidad}</span></td>
+                      <td style={{ padding:'12px 16px' }}><div style={{display:'flex', alignItems:'center', gap:5, fontSize:12, color:'#4E6B8C'}}><Clock size={14}/>{d.consultorio}</div></td>
+                      <td style={{ padding:'12px 16px' }}><StatusDot active={d.estado==='Activo'} /></td>
+                      <td style={{ padding:'12px 16px' }}>
+                        <div style={{ display:'flex', justifyContent:'center', gap:6 }}>
+                          <Link to={`/doctors/${d.id}`} className="doc-btn" style={{ width:32, height:32, borderRadius:8, background:'#EEF3FA', color:'#1047A9' }}><Eye size={14} /></Link>
+                          <button onClick={() => openEditPanel(d)} className="doc-btn" style={{ width:32, height:32, borderRadius:8, background:'#F5F8FC', color:'#4E6B8C' }}><Pencil size={14} /></button>
+                          <button onClick={() => setDelTarget(d)} className="doc-btn" style={{ width:32, height:32, borderRadius:8, background:'#FEE2E2', color:'#DC2626' }}><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: '#4E6B8C' }}>No se encontraron especialistas.</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
-      )}
 
-      {/* Modal Nuevo Médico */}
+        {/* ── PAGINACIÓN ── */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 20px', borderTop:'1.5px solid #DDE6F0' }}>
+          <p style={{ fontSize:12, color:'#4E6B8C' }}>Mostrando <strong>{paginatedData.length}</strong> de <strong>{filtered.length}</strong> médicos</p>
+          <div style={{ display:'flex', gap:6 }}>
+            <button disabled={page===1} onClick={() => setPage(p=>p-1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===1?.4:1, cursor:page===1?'not-allowed':'pointer' }}><ChevronLeft size={15} /></button>
+            {Array.from({ length: totalPages }).map((_, i) => (
+                 <button key={i+1} onClick={() => setPage(i+1)} style={{ width:32, height:32, borderRadius:8, fontSize:12, fontWeight:700, border: page===i+1 ? 'none' : '1.5px solid #DDE6F0', background: page===i+1 ? '#1047A9' : '#fff', color: page===i+1 ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{i+1}</button>
+            ))}
+            <button disabled={page===totalPages || totalPages === 0} onClick={() => setPage(p=>p+1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:(page===totalPages || totalPages === 0)?.4:1, cursor:(page===totalPages || totalPages === 0)?'not-allowed':'pointer' }}><ChevronRight size={15} /></button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ══ PANEL LATERAL: FORMULARIO ══ */}
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl overflow-y-auto max-h-[90vh]"
-            >
-              <div className="mb-8 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-[var(--color-text)]">Registrar Nuevo Médico</h2>
-                <button onClick={() => setIsModalOpen(false)} className="rounded-full p-2 hover:bg-gray-100">
-                  <X size={24} />
+        {panelOpen && (
+          <div style={{ position:'fixed', inset:0, zIndex:100, display:'flex', background:'rgba(11,31,58,.45)', backdropFilter:'blur(4px)' }}>
+            <div style={{ flex:1 }} onClick={() => setPanelOpen(false)} />
+            <motion.div initial={{ x:'100%' }} animate={{ x:0 }} exit={{ x:'100%' }} transition={{ type:'spring', damping:30, stiffness:200 }} className="doc-scroll" style={{ width:'100%', maxWidth:600, height:'100%', background:'#fff', display:'flex', flexDirection:'column', overflowY:'auto' }}>
+              <div style={{ padding:'22px 24px 18px', borderBottom:'1.5px solid #DDE6F0', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, background:'#fff', zIndex:10 }}>
+                <div>
+                  <h2 style={{ fontSize:20, fontWeight:700, color:'#0B1F3A' }}>{isEditing ? 'Editar Especialista' : 'Alta de Médico'}</h2>
+                  <p style={{ fontSize:12, color:'#4E6B8C', marginTop:2 }}>Registro oficial en la red hospitalaria Kurao</p>
+                </div>
+                <button onClick={() => setPanelOpen(false)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer' }}><X size={18} /></button>
+              </div>
+
+              <div style={{ padding:'24px', display:'flex', flexDirection:'column', gap:32, flex:1 }}>
+                <section>
+                  <SectionDivider icon={Shield} label="Información Profesional" />
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                    <Field label="Nombre(s)" required><input className="doc-input-focus" name="nombre" value={form.nombre} onChange={setField} style={inputBase}/></Field>
+                    <Field label="Apellidos" required><input className="doc-input-focus" name="apellidos" value={form.apellidos} onChange={setField} style={inputBase} /></Field>
+                    <Field label="Especialidad" required>
+                      <select className="doc-input-focus" name="especialidad" value={form.especialidad} onChange={setField} style={inputBase}>
+                        {['Medicina General','Cardiología','Pediatría','Dermatología','Neurología','Ginecología'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Cédula Profesional" required><input className="doc-input-focus" name="cedula" value={form.cedula} onChange={setField} style={inputBase} placeholder="0000000" /></Field>
+                  </div>
+                </section>
+
+                <section style={{ background:'#F8FAFD', padding:16, borderRadius:16, border:'1px solid #E2E8F0' }}>
+                  <SectionDivider icon={Clock} label="Horario y Ubicación" />
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+                    <Field label="Consultorio"><input className="doc-input-focus" name="consultorio" value={form.consultorio} onChange={setField} style={inputBase} placeholder="Ej. A-101" /></Field>
+                    <Field label="Entrada"><input className="doc-input-focus" name="horarioInicio" type="time" value={form.horarioInicio} onChange={setField} style={inputBase} /></Field>
+                    <Field label="Salida"><input className="doc-input-focus" name="horarioFin" type="time" value={form.horarioFin} onChange={setField} style={inputBase} /></Field>
+                  </div>
+                </section>
+
+                <section>
+                  <SectionDivider icon={Mail} label="Contacto Directo" />
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                    <Field label="Email Institucional"><input className="doc-input-focus" name="email" value={form.email} onChange={setField} style={inputBase} /></Field>
+                    <Field label="Teléfono"><input className="doc-input-focus" name="telefono" value={form.telefono} onChange={setField} style={inputBase} /></Field>
+                  </div>
+                </section>
+              </div>
+
+              <div style={{ padding:'20px 24px', borderTop:'1.5px solid #DDE6F0', display:'flex', gap:10, position:'sticky', bottom:0, background:'#fff' }}>
+                <button onClick={() => setPanelOpen(false)} style={{ flex:1, borderRadius:11, border:'1.5px solid #DDE6F0', padding:'12px', fontWeight:700, fontSize:13, color:'#4E6B8C', background:'#fff', cursor:'pointer' }}>Cancelar</button>
+                <button type="button" style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)' }}>
+                  {isEditing ? 'Actualizar Datos' : 'Registrar Médico'}
                 </button>
               </div>
-
-              <form className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Nombre *</label>
-                    <input type="text" className="w-full rounded-xl border border-[var(--color-border)] p-3 outline-none focus:border-[var(--color-primary)]" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Apellidos *</label>
-                    <input type="text" className="w-full rounded-xl border border-[var(--color-border)] p-3 outline-none focus:border-[var(--color-primary)]" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Especialidad *</label>
-                    <select className="w-full rounded-xl border border-[var(--color-border)] p-3 outline-none focus:border-[var(--color-primary)]">
-                      <option>Cardiología</option>
-                      <option>Pediatría</option>
-                      <option>Dermatología</option>
-                      <option>Neurología</option>
-                      <option>Ginecología</option>
-                      <option>Oftalmología</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Cédula Profesional *</label>
-                    <input type="text" className="w-full rounded-xl border border-[var(--color-border)] p-3 outline-none focus:border-[var(--color-primary)]" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Teléfono *</label>
-                    <input type="tel" className="w-full rounded-xl border border-[var(--color-border)] p-3 outline-none focus:border-[var(--color-primary)]" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Email *</label>
-                    <input type="email" className="w-full rounded-xl border border-[var(--color-border)] p-3 outline-none focus:border-[var(--color-primary)]" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">Horario de Atención</label>
-                  <input type="text" placeholder="Ej: Lunes a Viernes 09:00 - 14:00" className="w-full rounded-xl border border-[var(--color-border)] p-3 outline-none focus:border-[var(--color-primary)]" />
-                </div>
-
-                <div className="flex gap-4 pt-6">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 rounded-xl border border-[var(--color-border)] py-4 font-bold text-[var(--color-text-muted)] hover:bg-gray-50">
-                    Cancelar
-                  </button>
-                  <button type="button" className="flex-1 rounded-xl bg-[var(--color-primary)] py-4 font-bold text-white shadow-lg hover:bg-[var(--color-primary-dark)]">
-                    Guardar Médico
-                  </button>
-                </div>
-              </form>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Modal Confirmación Eliminar */}
       <AnimatePresence>
-        {confirmDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-[var(--color-danger)]">
-                <AlertCircle size={24} />
-              </div>
-              <h3 className="mb-2 text-xl font-bold text-[var(--color-text)]">¿Eliminar médico?</h3>
-              <p className="mb-6 text-[var(--color-text-muted)]">
-                Esta acción eliminará permanentemente el perfil del <strong>Dr. {confirmDelete.nombre} {confirmDelete.apellidos}</strong>.
-              </p>
-              <div className="flex gap-3">
-                <button onClick={() => setConfirmDelete(null)} className="flex-1 rounded-xl border border-[var(--color-border)] py-3 font-bold text-[var(--color-text-muted)] hover:bg-gray-50">Cancelar</button>
-                <button className="flex-1 rounded-xl bg-[var(--color-danger)] py-3 font-bold text-white hover:bg-red-700">Eliminar</button>
+        {delTarget && (
+          <div style={{ position:'fixed', inset:0, zIndex:110, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(11,31,58,.45)', backdropFilter:'blur(4px)' }}>
+            <motion.div initial={{ scale:.9, opacity:0 }} animate={{ scale:1, opacity:1 }} style={{ background:'#fff', borderRadius:20, padding:24, maxWidth:400, width:'90%', textAlign:'center' }}>
+              <div style={{ width:50, height:50, borderRadius:'50%', background:'#FEE2E2', color:'#DC2626', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}><AlertCircle size={24}/></div>
+              <h3 style={{ fontSize:18, fontWeight:700, color:'#0B1F3A' }}>¿Eliminar registro?</h3>
+              <p style={{ fontSize:14, color:'#4E6B8C', margin:'8px 0 24px' }}>Estás por eliminar al <b>Dr. {delTarget.nombre}</b>.</p>
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={()=>setDelTarget(null)} style={{ flex:1, padding:10, borderRadius:10, border:'1.5px solid #DDE6F0', background:'#fff', fontWeight:700, cursor:'pointer' }}>Cancelar</button>
+                <button onClick={handleDelete} style={{ flex:1, padding:10, borderRadius:10, border:'none', background:'#DC2626', color:'#fff', fontWeight:700, cursor:'pointer' }}>Eliminar</button>
               </div>
             </motion.div>
           </div>
