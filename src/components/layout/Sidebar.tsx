@@ -9,7 +9,6 @@ import {
   ClipboardList, 
   LogOut,
   Activity,
-  Settings,
   Menu,
   X
 } from 'lucide-react';
@@ -31,7 +30,6 @@ const Sidebar = () => {
     { to: '/doctors', icon: UserRound, label: 'Médicos', roles: ['admin', 'reception'] },
     { to: '/appointments', icon: Calendar, label: 'Citas', roles: ['admin', 'doctor', 'reception', 'patient'] },
     { to: '/history', icon: ClipboardList, label: 'Historial Clínico', roles: ['admin', 'doctor', 'patient'] },
-    { to: '/settings', icon: Settings, label: 'Configuración', roles: ['admin', 'doctor', 'reception', 'patient'] },
   ];
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(user?.role || 'admin'));
@@ -102,27 +100,6 @@ const Sidebar = () => {
         </nav>
 
         <div className="border-t border-[#E1E1E1] p-4 bg-[#FFFFFF]">
-          <NavLink
-            to="/profile"
-            onClick={closeSidebar}
-            className={({ isActive }) => cn(
-              "mb-3 flex items-center gap-3 rounded-xl p-2.5 transition-all hover:bg-gray-50",
-              isActive ? "bg-[#F0F4FA] border border-[#1047A9]/20" : "border border-transparent"
-            )}
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1047A9] text-white font-bold shadow-sm">
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
-            </div>
-            <div className="flex flex-col overflow-hidden">
-              <span className="truncate text-sm font-bold text-[#1A1A1A]">
-                {user?.name || 'Usuario Demo'}
-              </span>
-              <span className="truncate text-xs font-medium text-[#8DAAC8] capitalize">
-                {user?.role || 'Administrador'}
-              </span>
-            </div>
-          </NavLink>
-          
           <button
             onClick={() => {
               closeSidebar();

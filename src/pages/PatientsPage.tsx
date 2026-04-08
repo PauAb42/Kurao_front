@@ -5,10 +5,10 @@ import {
   Search, Plus, Eye, Pencil, Trash2,
   ChevronLeft, ChevronRight, AlertCircle, X,
   Users, UserCheck, UserX, Calendar,
-  Activity, Heart, FileText
+  Activity, Heart, FileText, ShieldCheck
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 /* ── Estilos Globales e Inyectados ── */
 const STYLES = `
@@ -124,10 +124,8 @@ const PatientsPage = () => {
   };
   const [form, setForm] = useState(initialForm);
 
-  // Cargamos los datos desde tu api.ts
   const { data, loading, refetch } = useApi(() => getPatients(page, 10, search), [page, search]);
   
-  // Extraemos la lista de pacientes de la respuesta del API
   const patients = data?.pacientes || [];
 
   const handleDelete = async () => {
@@ -169,13 +167,22 @@ const PatientsPage = () => {
     }
   }, [location.state, navigate]);
 
-  // Lógica de filtrado local basada en el estado de la tabla
   const filtered = useMemo(() => {
     return patients.filter(p => {
-      const statusMatch = filterStatus === 'Todos' || p.estado === filterStatus;
-      return statusMatch; // El filtrado por búsqueda ya lo hace el API
+      const isActivo = p.estado === 'Activo';
+      const statusMatch = 
+        filterStatus === 'Todos' || 
+        (filterStatus === 'Activo' && isActivo) || 
+        (filterStatus === 'Inactivo' && !isActivo);
+
+      const term = search.toLowerCase().trim();
+      const searchMatch = !term || 
+        `${p.nombre || ''} ${p.apellidos || ''}`.toLowerCase().includes(term) || 
+        String(p.expediente || '').toLowerCase().includes(term);
+
+      return statusMatch && searchMatch;
     });
-  }, [patients, filterStatus]);
+  }, [patients, filterStatus, search]);
 
   const ITEMS_PER_PAGE = 10;
   const totalPages = data?.paginas || 1;
@@ -191,11 +198,10 @@ const PatientsPage = () => {
         </button>
       </motion.div>
 
-      {/* Estadísticas usando los datos del API */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:14 }}>
         <MiniStat icon={Users} label="Total" value={data?.total || 0} bg="#EEF3FA" color="#1047A9" delay={.07} />
         <MiniStat icon={UserCheck} label="Activos" value={patients.filter(p=>p.estado==='Activo').length} bg="#D1FAF3" color="#00A88D" delay={.13} />
-        <MiniStat icon={UserX} label="Inactivos" value={patients.filter(p=>p.estado==='Inactivo').length} bg="#FEE2E2" color="#DC2626" delay={.19} />
+        <MiniStat icon={UserX} label="Inactivos" value={patients.filter(p=>p.estado!=='Activo').length} bg="#FEE2E2" color="#DC2626" delay={.19} />
         <MiniStat icon={Calendar} label="Citas mes" value="38" bg="#FEF3C7" color="#D97706" delay={.25} />
       </div>
 
@@ -203,11 +209,29 @@ const PatientsPage = () => {
         <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:12, padding:'16px 20px', borderBottom:'1.5px solid #DDE6F0' }}>
           <div style={{ position:'relative', flex:1, minWidth:200 }}>
             <Search size={14} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'#4E6B8C' }} />
-            <input className="pts-input-focus" type="text" placeholder="Buscar por nombre o expediente…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ ...inputBase, paddingLeft:36, background:'#F5F8FC' }} />
+            <input 
+              className="pts-input-focus" 
+              type="text" 
+              placeholder="Buscar por nombre o expediente…" 
+              value={search} 
+              onChange={e => { setSearch(e.target.value); setPage(1); }} 
+              style={{ ...inputBase, paddingLeft:36, background:'#F5F8FC' }} 
+            />
           </div>
           <div style={{ display:'flex', gap:6 }}>
             {['Todos','Activo','Inactivo'].map(s => (
-              <button key={s} onClick={() => { setFilter(s); setPage(1); }} style={{ padding:'7px 14px', borderRadius:999, fontSize:12, fontWeight:700, border: filterStatus===s ? 'none' : '1.5px solid #DDE6F0', background: filterStatus===s ? '#1047A9' : 'transparent', color: filterStatus===s ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{s}</button>
+              <button 
+                key={s} 
+                onClick={() => { setFilter(s); setPage(1); }} 
+                style={{ 
+                  padding:'7px 14px', borderRadius:999, fontSize:12, fontWeight:700, cursor:'pointer',
+                  border: filterStatus===s ? 'none' : '1.5px solid #DDE6F0', 
+                  background: filterStatus===s ? '#1047A9' : 'transparent', 
+                  color: filterStatus===s ? '#fff' : '#4E6B8C' 
+                }}
+              >
+                {s}
+              </button>
             ))}
           </div>
         </div>
@@ -224,6 +248,8 @@ const PatientsPage = () => {
             <tbody>
               {loading ? (
                 <tr><td colSpan={7} style={{ textAlign:'center', padding:20 }}>Cargando pacientes...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={7} style={{ textAlign:'center', padding:20, color:'#4E6B8C' }}>No se encontraron resultados</td></tr>
               ) : filtered.map((p, idx) => (
                 <motion.tr key={p.id} className="pts-row" initial={{ opacity:0, x:-8 }} animate={{ opacity:1, x:0 }} transition={{ delay: idx * 0.03 }} style={{ borderBottom:'1px solid #EEF3FA' }}>
                   <td style={{ padding:'12px 16px' }}><span style={{ fontFamily:'monospace', fontSize:11, fontWeight:800, color:'#1047A9', background:'#EEF3FA', padding:'2px 8px', borderRadius:6 }}>{p.expediente}</span></td>
@@ -248,16 +274,20 @@ const PatientsPage = () => {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 20px', borderTop:'1.5px solid #DDE6F0' }}>
           <p style={{ fontSize:12, color:'#4E6B8C' }}>Mostrando <strong>{filtered.length}</strong> de <strong>{data?.total || 0}</strong> pacientes</p>
           <div style={{ display:'flex', gap:6 }}>
-            <button disabled={page===1} onClick={() => setPage(p=>p-1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===1?.4:1, cursor:page===1?'not-allowed':'pointer' }}><ChevronLeft size={15} /></button>
+            {/* BOTÓN PREV - CENTRADO */}
+            <button disabled={page===1} onClick={() => setPage(p=>p-1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===1?.4:1, cursor:page===1?'not-allowed':'pointer' }}><ChevronLeft size={15} /></button>
+            
+            {/* NÚMEROS DE PÁGINA - CENTRADOS */}
             {Array.from({ length: totalPages }).map((_, i) => (
-                 <button key={i+1} onClick={() => setPage(i+1)} style={{ width:32, height:32, borderRadius:8, fontSize:12, fontWeight:700, border: page===i+1 ? 'none' : '1.5px solid #DDE6F0', background: page===i+1 ? '#1047A9' : '#fff', color: page===i+1 ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{i+1}</button>
+                 <button key={i+1} onClick={() => setPage(i+1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, fontSize:12, fontWeight:700, border: page===i+1 ? 'none' : '1.5px solid #DDE6F0', background: page===i+1 ? '#1047A9' : '#fff', color: page===i+1 ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{i+1}</button>
             ))}
-            <button disabled={page===totalPages} onClick={() => setPage(p=>p+1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===totalPages?.4:1, cursor:page===totalPages?'not-allowed':'pointer' }}><ChevronRight size={15} /></button>
+            
+            {/* BOTÓN NEXT - CENTRADO */}
+            <button disabled={page===totalPages} onClick={() => setPage(p=>p+1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===totalPages?.4:1, cursor:page===totalPages?'not-allowed':'pointer' }}><ChevronRight size={15} /></button>
           </div>
         </div>
       </motion.div>
 
-      {/* Formulario y Modal de eliminación se mantienen igual... */}
       <AnimatePresence>
         {panelOpen && (
           <div style={{ position:'fixed', inset:0, zIndex:100, display:'flex', background:'rgba(11,31,58,.45)', backdropFilter:'blur(4px)' }}>
@@ -268,7 +298,8 @@ const PatientsPage = () => {
                   <h2 style={{ fontSize:20, fontWeight:700, color:'#0B1F3A' }}>{isEditing ? 'Editar Expediente' : 'Nuevo Ingreso Hospitalario'}</h2>
                   <p style={{ fontSize:12, color:'#4E6B8C', marginTop:2 }}>Registro clínico detallado del paciente</p>
                 </div>
-                <button onClick={() => setPanelOpen(false)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer' }}><X size={18} /></button>
+                {/* BOTÓN CERRAR "X" - CENTRADO */}
+                <button onClick={() => setPanelOpen(false)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer' }}><X size={18} /></button>
               </div>
 
               <div style={{ padding:'24px', display:'flex', flexDirection:'column', gap:32, flex:1 }}>

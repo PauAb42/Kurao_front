@@ -252,11 +252,11 @@ const DoctorsPage = () => {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 20px', borderTop:'1.5px solid #DDE6F0' }}>
           <p style={{ fontSize:12, color:'#4E6B8C' }}>Mostrando <strong>{paginatedData.length}</strong> de <strong>{filtered.length}</strong> médicos</p>
           <div style={{ display:'flex', gap:6 }}>
-            <button disabled={page===1} onClick={() => setPage(p=>p-1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===1?.4:1, cursor:page===1?'not-allowed':'pointer' }}><ChevronLeft size={15} /></button>
+            <button disabled={page===1} onClick={() => setPage(p=>p-1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===1?.4:1, cursor:page===1?'not-allowed':'pointer' }}><ChevronLeft size={15} /></button>
             {Array.from({ length: totalPages }).map((_, i) => (
-                 <button key={i+1} onClick={() => setPage(i+1)} style={{ width:32, height:32, borderRadius:8, fontSize:12, fontWeight:700, border: page===i+1 ? 'none' : '1.5px solid #DDE6F0', background: page===i+1 ? '#1047A9' : '#fff', color: page===i+1 ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{i+1}</button>
+                 <button key={i+1} onClick={() => setPage(i+1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, fontSize:12, fontWeight:700, border: page===i+1 ? 'none' : '1.5px solid #DDE6F0', background: page===i+1 ? '#1047A9' : '#fff', color: page===i+1 ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{i+1}</button>
             ))}
-            <button disabled={page===totalPages || totalPages === 0} onClick={() => setPage(p=>p+1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:(page===totalPages || totalPages === 0)?.4:1, cursor:(page===totalPages || totalPages === 0)?'not-allowed':'pointer' }}><ChevronRight size={15} /></button>
+            <button disabled={page===totalPages || totalPages === 0} onClick={() => setPage(p=>p+1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:(page===totalPages || totalPages === 0)?.4:1, cursor:(page===totalPages || totalPages === 0)?'not-allowed':'pointer' }}><ChevronRight size={15} /></button>
           </div>
         </div>
       </motion.div>
@@ -272,7 +272,7 @@ const DoctorsPage = () => {
                   <h2 style={{ fontSize:20, fontWeight:700, color:'#0B1F3A' }}>{isEditing ? 'Editar Especialista' : 'Alta de Médico'}</h2>
                   <p style={{ fontSize:12, color:'#4E6B8C', marginTop:2 }}>Registro oficial en la red hospitalaria Kurao</p>
                 </div>
-                <button onClick={() => setPanelOpen(false)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer' }}><X size={18} /></button>
+                <button onClick={() => setPanelOpen(false)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer' }}><X size={18} /></button>
               </div>
 
               <div style={{ padding:'24px', display:'flex', flexDirection:'column', gap:32, flex:1 }}>
