@@ -188,12 +188,9 @@ const AppointmentsPage = () => {
 
     setIsSubmitting(true);
     try {
-        const selectedPatient = patients.find(p => p.id === Number(form.pacienteId));
-        const selectedDoctor = doctors.find(d => d.id === Number(form.medicoId));
-
         await createAppointment({
-            paciente: `${selectedPatient.nombre} ${selectedPatient.apellidos}`,
-            medico: `Dr. ${selectedDoctor.nombre} ${selectedDoctor.apellidos}`,
+            paciente_id: Number(form.pacienteId),
+            medico_id: Number(form.medicoId),
             fecha: form.fecha,
             hora: form.hora,
             motivo: form.motivo

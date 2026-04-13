@@ -1,223 +1,430 @@
-// Mock data for the demo
-const MOCK_USER = {
-  id: "1",
-  nombre: "Admin Kurao",
-  email: "admin@kurao.com",
-  rol: "admin"
-};
+// Cliente HTTP que llama al backend-kurao (Express + PostgreSQL).
+// Hace mapeo entre la forma de datos del backend y la forma que esperan las páginas.
 
-const MOCK_STATS = {
-  totalPatients: 6,
-  appointmentsToday: 45,
-  activeDoctors: 28,
-  pendingAppointments: 12,
-  upcomingAppointments: [
-    { id: 1, patient: "Juan Pérez", doctor: "Dra. Elena García", time: "09:00 AM", status: "Confirmada" },
-    { id: 2, patient: "María García", doctor: "Dr. Ricardo Martínez", time: "10:30 AM", status: "Pendiente" },
-    { id: 3, patient: "Carlos López", doctor: "Dra. Elena García", time: "11:15 AM", status: "Confirmada" },
-    { id: 4, patient: "Ana Beltrán", doctor: "Dr. Roberto Sánchez", time: "12:00 PM", status: "Cancelada" },
-  ]
-};
+const API_URL: string =
+  (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000/api';
 
-const MOCK_PATIENTS = [
-  { 
-    id: 1, nombre: "Juan", apellidos: "Pérez", edad: 45, genero: "M", sexo: "Masculino", 
-    ultimaVisita: "2024-03-15", estado: "Activo", expediente: "EXP-001", fecha_nacimiento: "1979-05-20",
-    curp: "PERJ790520HDFRRR01", ocupacion: "Ingeniero", telefono: "(618) 123-4567", email: "juan.perez@example.com",
-    direccion: "Av. 20 de Noviembre 123", contactoEmergencia: "María Pérez", telEmergencia: "(618) 987-6543",
-    tipo_sangre: "O+", alergias: "Penicilina", antecedentes: "Hipertensión arterial controlada.", 
-    medicamentos: "Losartán 50mg", peso: "78.5", altura: "176", presion: "120/80", temp: "36.5", notas: "Paciente regular, buena adherencia al tratamiento."
-  },
-  { 
-    id: 2, nombre: "María", apellidos: "García", edad: 32, genero: "F", sexo: "Femenino", 
-    ultimaVisita: "2024-03-18", estado: "En tratamiento", expediente: "EXP-002", fecha_nacimiento: "1992-08-14",
-    curp: "GARM920814MDFRRR02", ocupacion: "Diseñadora", telefono: "(618) 333-4444", email: "maria.g@example.com",
-    direccion: "Avenida Siempre Viva 742", contactoEmergencia: "Luis García", telEmergencia: "(618) 444-5555",
-    tipo_sangre: "A-", alergias: "Polen, Ácaros", antecedentes: "Asma leve.", 
-    medicamentos: "Salbutamol (PRN)", peso: "62", altura: "165", presion: "115/75", temp: "36.8", notas: "Control de asma favorable."
-  },
-  { 
-    id: 3, nombre: "Carlos", apellidos: "López", edad: 58, genero: "M", sexo: "Masculino", 
-    ultimaVisita: "2024-03-10", estado: "Crítico", expediente: "EXP-003", fecha_nacimiento: "1966-11-03",
-    curp: "LOPC661103HDFRRR03", ocupacion: "Comerciante", telefono: "(618) 555-6666", email: "carlos.l@example.com",
-    direccion: "Boulevard Principal 456", contactoEmergencia: "Carmen Ruiz", telEmergencia: "(618) 666-7777",
-    tipo_sangre: "B+", alergias: "Ninguna", antecedentes: "Diabetes Tipo 2.", 
-    medicamentos: "Metformina 850mg", peso: "90", altura: "170", presion: "145/90", temp: "37.2", notas: "Monitoreo estricto de glucosa requerido."
-  },
-];
+const TOKEN_KEY = 'kurao_token';
 
-// LISTADO DE 12 DOCTORES CON INFORMACIÓN COMPLETA
-const MOCK_DOCTORS = [
-  { id: 1, nombre: "Elena", apellidos: "García", especialidad: "Cardiología", cedula: "7723144", email: "elena.garcia@kurao.com", telefono: "555-0101", consultorio: "A-102", horarioInicio: "08:00", horarioFin: "16:00", estado: "Activo" },
-  { id: 2, nombre: "Ricardo", apellidos: "Martínez", especialidad: "Pediatría", cedula: "8821900", email: "ricardo.mtz@kurao.com", telefono: "555-0102", consultorio: "B-205", horarioInicio: "09:00", horarioFin: "17:00", estado: "Activo" },
-  { id: 3, nombre: "Sofía", apellidos: "Sánchez", especialidad: "Dermatología", cedula: "9910223", email: "sofia.sanchez@kurao.com", telefono: "555-0103", consultorio: "C-301", horarioInicio: "10:00", horarioFin: "18:00", estado: "Inactivo" },
-  { id: 4, nombre: "Miguel", apellidos: "Hernández", especialidad: "Neurología", cedula: "4567890", email: "miguel.hdz@kurao.com", telefono: "555-0104", consultorio: "A-404", horarioInicio: "08:00", horarioFin: "14:00", estado: "Activo" },
-  { id: 5, nombre: "Laura", apellidos: "Flores", especialidad: "Ginecología", cedula: "1122334", email: "laura.flores@kurao.com", telefono: "555-0105", consultorio: "D-108", horarioInicio: "07:00", horarioFin: "15:00", estado: "Activo" },
-  { id: 6, nombre: "Carlos", apellidos: "Reyes", especialidad: "Medicina General", cedula: "9988776", email: "carlos.reyes@kurao.com", telefono: "555-0106", consultorio: "G-100", horarioInicio: "09:00", horarioFin: "18:00", estado: "Inactivo" },
-  { id: 7, nombre: "Patricia", apellidos: "Luna", especialidad: "Oftalmología", cedula: "2233445", email: "patricia.luna@kurao.com", telefono: "555-0107", consultorio: "E-502", horarioInicio: "11:00", horarioFin: "19:00", estado: "Activo" },
-  { id: 8, nombre: "Roberto", apellidos: "Solis", especialidad: "Ortopedia", cedula: "3344556", email: "roberto.solis@kurao.com", telefono: "555-0108", consultorio: "B-202", horarioInicio: "08:00", horarioFin: "16:00", estado: "Activo" },
-  { id: 9, nombre: "Adriana", apellidos: "Torres", especialidad: "Psiquiatría", cedula: "4455667", email: "adriana.torres@kurao.com", telefono: "555-0109", consultorio: "C-105", horarioInicio: "12:00", horarioFin: "20:00", estado: "Activo" },
-  { id: 10, nombre: "Fernando", apellidos: "Gómez", especialidad: "Urología", cedula: "5566778", email: "fernando.gomez@kurao.com", telefono: "555-0110", consultorio: "A-303", horarioInicio: "09:00", horarioFin: "15:00", estado: "Activo" },
-  { id: 11, nombre: "Mónica", apellidos: "Díaz", especialidad: "Endocrinología", cedula: "6677889", email: "monica.diaz@kurao.com", telefono: "555-0111", consultorio: "D-204", horarioInicio: "08:00", horarioFin: "16:00", estado: "Activo" },
-  { id: 12, nombre: "Jorge", apellidos: "Vega", especialidad: "Gastroenterología", cedula: "7788990", email: "jorge.vega@kurao.com", telefono: "555-0112", consultorio: "E-101", horarioInicio: "10:00", horarioFin: "18:00", estado: "Activo" },
-];
+function getToken(): string | null {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
 
-// --- AUTH ---
-export const login = async (credentials: any) => {
-  await new Promise(resolve => setTimeout(resolve, 800));
-  const users: any = {
-    'admin@kurao.com': { id: '1', name: 'Admin Kurao', email: 'admin@kurao.com', role: 'admin' },
-    'paciente@kurao.com': { id: '2', name: 'Juan Pérez', email: 'paciente@kurao.com', role: 'patient', age: 45, gender: 'M' },
-    'doctor@kurao.com': { id: '3', name: 'Dra. Elena García', email: 'doctor@kurao.com', role: 'doctor', specialty: 'Cardiología' },
-    'recepcion@kurao.com': { id: '4', name: 'Ana Martínez', email: 'recepcion@kurao.com', role: 'reception' },
+async function request(path: string, options: RequestInit = {}): Promise<any> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
   };
-  const user = users[credentials.email];
-  if (user && credentials.password === "kurao123") {
-    return { token: "mock_token_" + user.id, user };
-  } else {
-    throw new Error("Correo electrónico o contraseña incorrectos.");
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+
+  if (!res.ok) {
+    let msg = `Error ${res.status}`;
+    try {
+      const err = await res.json();
+      msg = err?.error || err?.message || msg;
+    } catch { /* no-op */ }
+    if (res.status === 401) {
+      // Sesión inválida → limpia token para forzar re-login
+      try {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem('kurao_user');
+      } catch { /* no-op */ }
+    }
+    throw new Error(msg);
   }
+
+  if (res.status === 204) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+/* ─────────── MAPEOS ─────────── */
+
+const ROL_TO_ROLE: Record<string, string> = {
+  admin: 'admin',
+  medico: 'doctor',
+  recepcionista: 'reception',
 };
 
-export const updateProfile = async (id: string | number, data: any) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return { id, ...data };
+function mapUsuarioToUser(u: any): any {
+  if (!u) return null;
+  return {
+    id: u.id,
+    name: u.nombre,
+    email: u.email,
+    role: ROL_TO_ROLE[u.rol] || u.rol,
+    phone: u.telefono,
+    address: u.direccion,
+  };
+}
+
+function mapPaciente(p: any): any {
+  if (!p) return p;
+  return {
+    ...p,
+    apellidos: p.apellido,
+    sexo: p.genero,
+    ultimaVisita: p.ultima_visita,
+  };
+}
+
+function parseHorario(horario: any): { horarioInicio: string; horarioFin: string } {
+  try {
+    const h = typeof horario === 'string' ? JSON.parse(horario) : horario;
+    const dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'];
+    for (const d of dias) {
+      if (h && h[d]) {
+        const [ini, fin] = String(h[d]).split('-');
+        return {
+          horarioInicio: (ini || '').trim(),
+          horarioFin: (fin || '').trim(),
+        };
+      }
+    }
+  } catch { /* no-op */ }
+  return { horarioInicio: '', horarioFin: '' };
+}
+
+function mapMedico(m: any): any {
+  if (!m) return m;
+  const { horarioInicio, horarioFin } = parseHorario(m.horario);
+  return {
+    ...m,
+    apellidos: m.apellido,
+    horarioInicio,
+    horarioFin,
+    estado: m.activo === false ? 'Inactivo' : 'Activo',
+    consultorio: m.consultorio || '—',
+  };
+}
+
+// Backend estados: Pendiente | Confirmada | Cancelada | Completada
+// Frontend estados: Programada | Completada | Cancelada
+const BE_TO_FE_ESTADO: Record<string, string> = {
+  Pendiente: 'Programada',
+  Confirmada: 'Programada',
+  Completada: 'Completada',
+  Cancelada: 'Cancelada',
+};
+const FE_TO_BE_ESTADO: Record<string, string> = {
+  Programada: 'Pendiente',
+  Completada: 'Completada',
+  Cancelada: 'Cancelada',
+};
+
+function mapCita(c: any): any {
+  if (!c) return c;
+  const rawId = c.id;
+  return {
+    id: `FOL-${rawId}`,
+    rawId,
+    paciente: c.paciente_nombre,
+    medico: c.medico_nombre ? `Dr. ${c.medico_nombre}` : '',
+    paciente_id: c.paciente_id,
+    medico_id: c.medico_id,
+    fecha: c.fecha,
+    hora: typeof c.hora === 'string' ? c.hora.slice(0, 5) : c.hora,
+    motivo: c.motivo || '',
+    estado: BE_TO_FE_ESTADO[c.estado] || c.estado,
+    notas: c.notas,
+  };
+}
+
+function parseFolio(id: string | number): number {
+  if (typeof id === 'number') return id;
+  const m = String(id).match(/(\d+)$/);
+  return m ? Number(m[1]) : Number(id);
+}
+
+function formatFecha(fecha: any): string {
+  if (!fecha) return '';
+  try {
+    const d = new Date(fecha);
+    if (isNaN(d.getTime())) return String(fecha);
+    return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return String(fecha);
+  }
+}
+
+/* ─────────── AUTH ─────────── */
+
+export const login = async (credentials: { email: string; password: string }) => {
+  const data = await request('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  });
+  return { token: data.token, user: mapUsuarioToUser(data.usuario) };
 };
 
 export const logout = async () => {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  return { success: true };
+  try {
+    return await request('/auth/logout', { method: 'POST' });
+  } catch {
+    return { success: true };
+  }
 };
 
-// --- DASHBOARD ---
+export const getProfile = async () => {
+  const data = await request('/auth/me');
+  return mapUsuarioToUser(data);
+};
+
+export const updateProfile = async (_id: string | number, data: any) => {
+  const body = {
+    nombre: data.name ?? data.nombre,
+    telefono: data.phone ?? data.telefono,
+    direccion: data.address ?? data.direccion,
+  };
+  const resp = await request('/auth/me', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  return mapUsuarioToUser(resp);
+};
+
+/* ─────────── DASHBOARD ─────────── */
+
 export const getDashboardStats = async () => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return MOCK_STATS;
+  const [metrics, citasHoy] = await Promise.all([
+    request('/dashboard'),
+    request('/dashboard/citas-hoy').catch(() => [] as any[]),
+  ]);
+  return {
+    totalPatients: metrics?.total_pacientes ?? 0,
+    appointmentsToday: metrics?.citas_hoy ?? 0,
+    activeDoctors: metrics?.medicos_activos ?? 0,
+    pendingAppointments: metrics?.citas_pendientes ?? 0,
+    upcomingAppointments: (citasHoy || []).map((c: any) => ({
+      id: c.id,
+      patient: c.paciente_nombre,
+      doctor: c.medico_nombre ? `Dr. ${c.medico_nombre}` : '',
+      time: typeof c.hora === 'string' ? c.hora.slice(0, 5) : c.hora,
+      status: BE_TO_FE_ESTADO[c.estado] || c.estado,
+    })),
+  };
 };
 
-// --- PACIENTES ---
-export const getPatients = async (page = 1, limit = 10, search = "") => {
-  await new Promise(resolve => setTimeout(resolve, 500));
+/* ─────────── PACIENTES ─────────── */
+
+export const getPatients = async (page = 1, limit = 10, search = '') => {
+  const qs = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    ...(search ? { q: search } : {}),
+  });
+  const data = await request(`/pacientes?${qs.toString()}`);
+  const pacientes = (data?.data || []).map(mapPaciente);
   return {
-    pacientes: MOCK_PATIENTS,
-    patients: MOCK_PATIENTS,
-    total: MOCK_PATIENTS.length,
-    paginas: 1
+    pacientes,
+    patients: pacientes,
+    total: data?.pagination?.total ?? pacientes.length,
+    paginas: data?.pagination?.totalPages ?? 1,
   };
 };
 
 export const getPatientById = async (id: string | number) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return MOCK_PATIENTS.find(p => p.id === Number(id)) || MOCK_PATIENTS[0];
+  const p = await request(`/pacientes/${id}`);
+  return mapPaciente(p);
 };
 
 export const createPatient = async (data: any) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { id: Math.random(), ...data };
+  const body = {
+    nombre: data.nombre,
+    apellido: data.apellidos ?? data.apellido,
+    fecha_nacimiento: data.fechaNacimiento ?? data.fecha_nacimiento,
+    edad: data.edad !== undefined && data.edad !== '' ? Number(data.edad) : undefined,
+    genero: data.sexo ?? data.genero,
+    telefono: data.telefono,
+    email: data.email,
+    direccion: data.direccion,
+  };
+  return mapPaciente(
+    await request('/pacientes', { method: 'POST', body: JSON.stringify(body) }),
+  );
 };
 
 export const updatePatient = async (id: string | number, data: any) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { id, ...data };
+  const body: any = {
+    nombre: data.nombre,
+    apellido: data.apellidos ?? data.apellido,
+    fecha_nacimiento: data.fechaNacimiento ?? data.fecha_nacimiento,
+    edad: data.edad !== undefined && data.edad !== '' ? Number(data.edad) : undefined,
+    genero: data.sexo ?? data.genero,
+    telefono: data.telefono,
+    email: data.email,
+    direccion: data.direccion,
+    estado: data.estado,
+  };
+  return mapPaciente(
+    await request(`/pacientes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  );
 };
 
 export const deletePatient = async (id: string | number) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { success: true };
+  return request(`/pacientes/${id}`, { method: 'DELETE' });
 };
 
-// --- MÉDICOS ---
+/* ─────────── MÉDICOS ─────────── */
+
 export const getDoctors = async () => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return MOCK_DOCTORS;
+  const data = await request('/medicos');
+  return (Array.isArray(data) ? data : []).map(mapMedico);
 };
 
 export const getDoctorById = async (id: string | number) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const doctor = MOCK_DOCTORS.find(d => d.id === Number(id));
-    return doctor || MOCK_DOCTORS[0];
+  const m = await request(`/medicos/${id}`);
+  return mapMedico(m);
 };
 
-export const createDoctor = async (data: any) => ({ id: Math.random(), ...data });
-export const updateDoctor = async (id: string | number, data: any) => ({ id, ...data });
-export const deleteDoctor = async (id: string | number) => ({ success: true });
+function horarioFromRange(inicio?: string, fin?: string): Record<string, string> | undefined {
+  if (!inicio && !fin) return undefined;
+  const rango = `${inicio || ''}-${fin || ''}`;
+  return {
+    lunes: rango, martes: rango, miercoles: rango, jueves: rango, viernes: rango,
+  };
+}
 
-// --- CITAS ---
-// Usamos let para poder modificar el arreglo simulando una base de datos
-let MOCK_APPOINTMENTS = [
-  { id: 'FOL-101', paciente: "Juan Pérez", medico: "Dra. Elena García", fecha: "2024-03-20", hora: "09:00 AM", estado: "Completada", motivo: "Chequeo de rutina" },
-  { id: 'FOL-102', paciente: "María García", medico: "Dr. Ricardo Martínez", fecha: "2024-03-20", hora: "11:30 AM", estado: "Programada", motivo: "Seguimiento de asma" },
-  { id: 'FOL-103', paciente: "Carlos López", medico: "Dra. Elena García", fecha: "2024-03-21", hora: "10:15 AM", estado: "Cancelada", motivo: "Dolor en el pecho" },
-  { id: 'FOL-104', paciente: "Ana Beltrán", medico: "Dr. Roberto Solis", fecha: "2024-03-22", hora: "16:00", estado: "Programada", motivo: "Dolor articular" },
-  { id: 'FOL-105', paciente: "Juan Pérez", medico: "Dra. Adriana Torres", fecha: "2024-03-25", hora: "12:00", estado: "Programada", motivo: "Consulta de seguimiento" },
-];
+export const createDoctor = async (data: any) => {
+  const body: any = {
+    nombre: data.nombre,
+    apellido: data.apellidos ?? data.apellido,
+    especialidad: data.especialidad,
+    cedula: data.cedula,
+    telefono: data.telefono,
+    email: data.email,
+    horario: horarioFromRange(data.horarioInicio, data.horarioFin),
+  };
+  return mapMedico(
+    await request('/medicos', { method: 'POST', body: JSON.stringify(body) }),
+  );
+};
+
+export const updateDoctor = async (id: string | number, data: any) => {
+  const body: any = {};
+  if (data.nombre !== undefined) body.nombre = data.nombre;
+  if (data.apellidos !== undefined) body.apellido = data.apellidos;
+  else if (data.apellido !== undefined) body.apellido = data.apellido;
+  if (data.especialidad !== undefined) body.especialidad = data.especialidad;
+  if (data.cedula !== undefined) body.cedula = data.cedula;
+  if (data.telefono !== undefined) body.telefono = data.telefono;
+  if (data.email !== undefined) body.email = data.email;
+  if (data.estado !== undefined) body.activo = data.estado === 'Activo';
+  if (data.horarioInicio !== undefined || data.horarioFin !== undefined) {
+    body.horario = horarioFromRange(data.horarioInicio, data.horarioFin);
+  }
+  return mapMedico(
+    await request(`/medicos/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  );
+};
+
+export const deleteDoctor = async (id: string | number) => {
+  return request(`/medicos/${id}`, { method: 'DELETE' });
+};
+
+/* ─────────── CITAS ─────────── */
 
 export const getAppointments = async (filters: any = {}) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  let filtered = [...MOCK_APPOINTMENTS];
-  
-  // Filtrar por estado
-  if (filters.status && filters.status !== 'all') {
-    filtered = filtered.filter(a => a.estado === filters.status);
+  const qs = new URLSearchParams();
+  if (filters?.status && filters.status !== 'all' && filters.status !== 'Todas') {
+    qs.set('estado', FE_TO_BE_ESTADO[filters.status] || filters.status);
   }
-  
-  // Filtrar por doctor (para la vista de detalle de doctor)
-  if (filters.doctorId) {
-      const doctor = MOCK_DOCTORS.find(d => d.id === Number(filters.doctorId));
-      if (doctor) {
-          filtered = filtered.filter(a => a.medico.includes(doctor.apellidos));
-      }
+  if (filters?.q) qs.set('q', filters.q);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  const data = await request(`/citas${suffix}`);
+  let mapped = (Array.isArray(data) ? data : []).map(mapCita);
+  if (filters?.doctorId) {
+    mapped = mapped.filter((a: any) => Number(a.medico_id) === Number(filters.doctorId));
   }
-
-  // Truco de compatibilidad
-  const result: any = [...filtered];
-  result.appointments = result; 
+  const result: any = [...mapped];
+  result.appointments = mapped;
   return result;
 };
 
 export const getAppointmentById = async (id: string | number) => {
-    return MOCK_APPOINTMENTS.find(a => a.id === id) || MOCK_APPOINTMENTS[0];
+  const realId = parseFolio(id);
+  return mapCita(await request(`/citas/${realId}`));
 };
 
 export const createAppointment = async (data: any) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const newApt = {
-        id: `FOL-${100 + MOCK_APPOINTMENTS.length + 1}`,
-        ...data,
-        estado: 'Programada'
-    };
-    MOCK_APPOINTMENTS = [newApt, ...MOCK_APPOINTMENTS];
-    return newApt;
+  const body = {
+    paciente_id: Number(data.paciente_id ?? data.pacienteId),
+    medico_id: Number(data.medico_id ?? data.medicoId),
+    fecha: data.fecha,
+    hora: data.hora,
+    motivo: data.motivo,
+  };
+  return mapCita(
+    await request('/citas', { method: 'POST', body: JSON.stringify(body) }),
+  );
 };
 
-export const updateAppointment = async (id: string | number, data: any) => ({ id, ...data });
+export const updateAppointment = async (id: string | number, data: any) => {
+  const realId = parseFolio(id);
+  const body: any = {};
+  if (data.paciente_id !== undefined || data.pacienteId !== undefined)
+    body.paciente_id = Number(data.paciente_id ?? data.pacienteId);
+  if (data.medico_id !== undefined || data.medicoId !== undefined)
+    body.medico_id = Number(data.medico_id ?? data.medicoId);
+  if (data.fecha !== undefined) body.fecha = data.fecha;
+  if (data.hora !== undefined) body.hora = data.hora;
+  if (data.motivo !== undefined) body.motivo = data.motivo;
+  if (data.notas !== undefined) body.notas = data.notas;
+  return mapCita(
+    await request(`/citas/${realId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  );
+};
 
 export const cancelAppointment = async (id: string | number) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    MOCK_APPOINTMENTS = MOCK_APPOINTMENTS.map(apt => 
-        apt.id === id ? { ...apt, estado: 'Cancelada' } : apt
-    );
-    return { success: true };
+  const realId = parseFolio(id);
+  await request(`/citas/${realId}/estado`, {
+    method: 'PATCH',
+    body: JSON.stringify({ estado: 'Cancelada' }),
+  });
+  return { success: true };
 };
 
 export const completeAppointment = async (id: string | number) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    MOCK_APPOINTMENTS = MOCK_APPOINTMENTS.map(apt => 
-        apt.id === id ? { ...apt, estado: 'Completada' } : apt
-    );
-    return { success: true };
+  const realId = parseFolio(id);
+  await request(`/citas/${realId}/estado`, {
+    method: 'PATCH',
+    body: JSON.stringify({ estado: 'Completada' }),
+  });
+  return { success: true };
 };
 
-// --- HISTORIAL CLÍNICO ---
+/* ─────────── HISTORIAL CLÍNICO ─────────── */
+
 export const getMedicalHistory = async (patientId: string | number) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const history = [
-        { id: 1, fecha: '10 Mar 2024', hora: '10:00 AM', medico: 'Dra. Elena García', especialidad: 'Cardiología', diagnostico: 'Faringitis aguda con inflamación severa.', tratamiento: 'Amoxicilina 500mg c/8h por 7 días, Paracetamol 500mg c/6h.', medicamentos: 'Amoxicilina, Paracetamol', observaciones: 'Paciente refiere dolor al tragar desde hace 48h.', notas: 'Cultivo faríngeo positivo. Sin complicaciones.' },
-        { id: 2, fecha: '15 Ene 2024', hora: '11:30 AM', medico: 'Dr. Ricardo Martínez', especialidad: 'Medicina General', diagnostico: 'Control de Hipertensión Arterial', tratamiento: 'Enalapril 10mg diario. Dieta hiposódica.', medicamentos: 'Enalapril 10mg', observaciones: 'Presión arterial estable 120/80.', notas: 'Presión arterial estable 120/80. Próximo control en 3 meses.' },
-    ] as any;
-    history.records = history;
-    return history;
+  const data = await request(`/historial/paciente/${patientId}`);
+  const list = (data?.historial || []).map((h: any) => ({
+    id: h.id,
+    fecha: formatFecha(h.fecha),
+    hora: '',
+    medico: h.medico_nombre ? `Dr. ${h.medico_nombre}` : '',
+    especialidad: h.medico_especialidad,
+    diagnostico: h.diagnostico,
+    tratamiento: h.tratamiento,
+    medicamentos: '',
+    observaciones: h.observaciones,
+    notas: h.observaciones,
+  }));
+  const result: any = [...list];
+  result.records = list;
+  return result;
 };
 
-export const createMedicalRecord = async (patientId: string | number, data: any) => ({ id: Math.random(), ...data });
+export const createMedicalRecord = async (patientId: string | number, data: any) => {
+  const body = {
+    paciente_id: Number(patientId),
+    medico_id: Number(data.medicoId ?? data.medico_id),
+    fecha: data.fecha,
+    diagnostico: data.diagnostico,
+    tratamiento: data.tratamiento,
+    observaciones: data.observaciones ?? data.notas ?? data.medicamentos ?? '',
+  };
+  return request('/historial', { method: 'POST', body: JSON.stringify(body) });
+};
