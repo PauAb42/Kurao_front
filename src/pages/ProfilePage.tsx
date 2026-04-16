@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   User, Mail, Phone, MapPin, Save, Loader2, 
-  CheckCircle, Briefcase, Hash, Edit2, X 
+  CheckCircle, Briefcase, Hash, Edit2, X, AlertTriangle 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { updateProfile } from '../services/api';
@@ -117,12 +117,21 @@ const ProfilePage = () => {
     address: user?.address || 'Ciudad de México, México',
   });
   
-  // NUEVO: Estado para controlar si estamos en modo edición
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
-  // NUEVO: Función para cancelar la edición y restaurar los datos
+  // ── ESTADO Y LÓGICA DE ALERTAS (TOAST) ──
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const toastTimer = useRef(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 4000);
+  };
+
   const handleCancel = () => {
     setIsEditing(false);
     setFormData({
@@ -136,19 +145,17 @@ const ProfilePage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setSuccess(false);
     try {
       const updatedUser = await updateProfile(user.id, formData);
       const savedUser = JSON.parse(localStorage.getItem('kurao_user') || '{}');
       const newUser = { ...savedUser, ...updatedUser };
       localStorage.setItem('kurao_user', JSON.stringify(newUser));
       
-      setSuccess(true);
-      setIsEditing(false); // NUEVO: Bloquear de nuevo el formulario tras guardar
-      setTimeout(() => setSuccess(false), 3500);
+      setIsEditing(false);
+      showToast('Cambios guardados con éxito.', 'success');
     } catch (error) {
       console.error("Error updating profile", error);
-      alert("Hubo un error al actualizar el perfil.");
+      showToast('Hubo un error al actualizar el perfil.', 'error');
     } finally {
       setLoading(false);
     }
@@ -160,8 +167,61 @@ const ProfilePage = () => {
   };
 
   return (
-    <div className="pro-root" style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: '16px' }}>
+    <div className="pro-root" style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: '16px', position: 'relative' }}>
       
+      {/* ── SISTEMA DE ALERTAS (TOAST) ── */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: 20 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            style={{
+              position: 'fixed',
+              top: 24,
+              right: 24,
+              zIndex: 9999,
+              background: '#fff',
+              padding: '14px 18px',
+              borderRadius: 14,
+              boxShadow: '0 8px 30px rgba(11,31,58,0.12)',
+              border: '1px solid #DDE6F0',
+              borderLeft: toast.type === 'success' ? '4px solid #10B981' : '4px solid #EF4444',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              minWidth: 300,
+              maxWidth: 400
+            }}
+          >
+            {toast.type === 'success' ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#D1FAE5', color: '#10B981', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <CheckCircle size={18} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FEE2E2', color: '#EF4444', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <AlertTriangle size={18} />
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0B1F3A' }}>
+                {toast.type === 'success' ? 'Operación exitosa' : 'Atención requerida'}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#4E6B8C', lineHeight: 1.4 }}>
+                {toast.message}
+              </p>
+            </div>
+            <button 
+              onClick={() => setToast({ ...toast, show: false })} 
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── HEADER TIPO DASHBOARD ── */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
@@ -285,22 +345,8 @@ const ProfilePage = () => {
               </div>
 
               {/* Footer del Formulario */}
-              <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1.5px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+              <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1.5px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16 }}>
                 
-                <div style={{ flex: 1, minHeight: 40, display: 'flex', alignItems: 'center' }}>
-                  <AnimatePresence>
-                    {success && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#059669', background: '#D1FAE5', padding: '10px 18px', borderRadius: 12, fontSize: 13, fontWeight: 700 }}
-                      >
-                        <CheckCircle size={18} /> ¡Cambios guardados con éxito!
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* NUEVO: Renderizado condicional de los botones basado en isEditing */}
                 {!isEditing ? (
                   <button
                     type="button" 

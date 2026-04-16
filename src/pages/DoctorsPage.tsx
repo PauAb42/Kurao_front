@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApi } from '../hooks/useApi';
-import { getDoctors, deleteDoctor, createDoctor, updateDoctor } from '../services/api';
+import { getDoctors, getDoctorById, deleteDoctor, createDoctor, updateDoctor } from '../services/api';
 import {
   Search, Plus, Eye, Pencil, Trash2,
   ChevronLeft, ChevronRight, AlertCircle, X,
   Stethoscope, UserCheck, UserX, Calendar,
-  Clock, Mail, Phone, Award, Shield
+  Clock, Mail, Phone, Award, Shield,
+  CheckCircle, AlertTriangle // <-- Íconos agregados para las alertas
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -105,7 +106,6 @@ const SectionDivider = ({ icon: Icon, label }) => (
 );
 
 const DoctorsPage = () => {
-  // Integración con el Hook de API - Aseguramos que inicie como array vacío
   const { data, loading, error, refresh } = useApi(getDoctors);
   const doctors = Array.isArray(data) ? data : [];
   
@@ -115,6 +115,20 @@ const DoctorsPage = () => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [loadingDoctor, setLoadingDoctor] = useState(false);
+
+  // ── ESTADO Y LÓGICA DE ALERTAS ──
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const toastTimer = useRef(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 4000);
+  };
   
   const initialForm = {
     nombre:'', apellidos:'', especialidad:'Medicina General', cedula:'', 
@@ -125,7 +139,6 @@ const DoctorsPage = () => {
 
   const ITEMS_PER_PAGE = 10;
 
-  // Lógica de Filtrado con validación de seguridad
   const filtered = useMemo(() => {
     if (!doctors) return [];
     return doctors.filter(d => {
@@ -150,22 +163,127 @@ const DoctorsPage = () => {
   const paginatedData = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const openAddPanel = () => { setForm(initialForm); setIsEditing(false); setPanelOpen(true); };
-  const openEditPanel = (d) => { setForm({...d}); setIsEditing(true); setPanelOpen(true); };
+  
+  const openEditPanel = async (d) => {
+    setLoadingDoctor(true);
+    try {
+      const detail = await getDoctorById(d.id);
+      setForm({
+        nombre: detail.nombre || '',
+        apellidos: detail.apellidos || '',
+        especialidad: detail.especialidad || 'Medicina General',
+        cedula: detail.cedula || '',
+        email: detail.email || '',
+        telefono: detail.telefono || '',
+        consultorio: detail.consultorio || '',
+        horarioInicio: detail.horarioInicio || detail.horario?.entrada || '09:00',
+        horarioFin: detail.horarioFin || detail.horario?.salida || '18:00',
+        estado: detail.estado || 'Activo',
+        id: detail.id,
+      });
+      setIsEditing(true);
+      setPanelOpen(true);
+    } catch (err) {
+      showToast('No se pudo cargar al médico para edición.', 'error');
+    } finally {
+      setLoadingDoctor(false);
+    }
+  };
+  
   const setField = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
   const handleDelete = async () => {
     if (!delTarget) return;
     try {
       await deleteDoctor(delTarget.id);
-      refresh(); 
+      refresh();
       setDelTarget(null);
+      showToast('Médico eliminado correctamente.', 'success');
     } catch (err) {
-      console.error("Error al eliminar:", err);
+      showToast('Error al eliminar médico: ' + (err?.message || err), 'error');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!form.nombre.trim() || !form.apellidos.trim() || !form.cedula.trim()) {
+      showToast('Nombre, apellidos y cédula son obligatorios.', 'error');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      if (isEditing && form.id) {
+        await updateDoctor(form.id, form);
+        showToast('Médico actualizado correctamente.', 'success');
+      } else {
+        await createDoctor(form);
+        showToast('Médico registrado correctamente.', 'success');
+      }
+      setPanelOpen(false);
+      setForm(initialForm);
+      refresh();
+    } catch (err) {
+      showToast('Error al guardar médico: ' + (err?.message || err), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="doc-root" style={{ display:'flex', flexDirection:'column', gap:22 }}>
+    <div className="doc-root" style={{ display:'flex', flexDirection:'column', gap:22, position: 'relative' }}>
+
+      {/* ── SISTEMA DE ALERTAS (TOAST) ── */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: 20 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            style={{
+              position: 'fixed',
+              top: 24,
+              right: 24,
+              zIndex: 9999,
+              background: '#fff',
+              padding: '14px 18px',
+              borderRadius: 14,
+              boxShadow: '0 8px 30px rgba(11,31,58,0.12)',
+              border: '1px solid #DDE6F0',
+              borderLeft: toast.type === 'success' ? '4px solid #10B981' : '4px solid #EF4444',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              minWidth: 300,
+              maxWidth: 400
+            }}
+          >
+            {toast.type === 'success' ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#D1FAE5', color: '#10B981', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <CheckCircle size={18} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FEE2E2', color: '#EF4444', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <AlertTriangle size={18} />
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0B1F3A' }}>
+                {toast.type === 'success' ? 'Operación exitosa' : 'Atención requerida'}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#4E6B8C', lineHeight: 1.4 }}>
+                {toast.message}
+              </p>
+            </div>
+            <button 
+              onClick={() => setToast({ ...toast, show: false })} 
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── FILA SUPERIOR ── */}
       <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -310,8 +428,8 @@ const DoctorsPage = () => {
 
               <div style={{ padding:'20px 24px', borderTop:'1.5px solid #DDE6F0', display:'flex', gap:10, position:'sticky', bottom:0, background:'#fff' }}>
                 <button onClick={() => setPanelOpen(false)} style={{ flex:1, borderRadius:11, border:'1.5px solid #DDE6F0', padding:'12px', fontWeight:700, fontSize:13, color:'#4E6B8C', background:'#fff', cursor:'pointer' }}>Cancelar</button>
-                <button type="button" style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)' }}>
-                  {isEditing ? 'Actualizar Datos' : 'Registrar Médico'}
+                <button type="button" onClick={handleSave} disabled={saving || loadingDoctor} style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:saving || loadingDoctor ? 'not-allowed' : 'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)', opacity: saving || loadingDoctor ? 0.7 : 1 }}>
+                  {saving ? (isEditing ? 'Guardando...' : 'Registrando...') : (isEditing ? 'Actualizar Datos' : 'Registrar Médico')}
                 </button>
               </div>
             </motion.div>

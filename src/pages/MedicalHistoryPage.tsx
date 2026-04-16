@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Search, ClipboardList, Plus, Calendar, ChevronRight, X, User, Activity, FileText, Stethoscope, ChevronUp, ChevronDown, Pill } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Search, ClipboardList, Plus, Calendar, ChevronRight, X, User, Activity, FileText, Stethoscope, ChevronUp, ChevronDown, Pill, CheckCircle, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
@@ -66,6 +66,18 @@ const MedicalHistoryPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedRecord, setExpandedRecord] = useState(null); // Estado para el acordeón
 
+  // ── ESTADO Y LÓGICA DE ALERTAS ──
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const toastTimer = useRef(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 4000);
+  };
+
   // Formularios
   const initialForm = { medicoId: '', fecha: new Date().toISOString().split('T')[0], diagnostico: '', tratamiento: '', observaciones: '' };
   const [form, setForm] = useState(initialForm);
@@ -98,7 +110,7 @@ const MedicalHistoryPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.medicoId || !form.fecha || !form.diagnostico || !form.tratamiento) {
-        alert("Por favor completa los campos requeridos.");
+        showToast("Por favor completa los campos requeridos.", 'error');
         return;
     }
 
@@ -113,16 +125,70 @@ const MedicalHistoryPage = () => {
         setPanelOpen(false);
         setForm(initialForm);
         refetch();
+        showToast('Registro clínico guardado correctamente.', 'success');
     } catch (err) {
-        alert("Error al guardar el registro clínico.");
+        showToast("Error al guardar el registro clínico: " + (err?.message || err), 'error');
     } finally {
         setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="med-root" style={{ display:'flex', flexDirection:'column', gap:22 }}>
+    <div className="med-root" style={{ display:'flex', flexDirection:'column', gap:22, position: 'relative' }}>
       
+      {/* ── SISTEMA DE ALERTAS (TOAST) ── */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: 20 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            style={{
+              position: 'fixed',
+              top: 24,
+              right: 24,
+              zIndex: 9999,
+              background: '#fff',
+              padding: '14px 18px',
+              borderRadius: 14,
+              boxShadow: '0 8px 30px rgba(11,31,58,0.12)',
+              border: '1px solid #DDE6F0',
+              borderLeft: toast.type === 'success' ? '4px solid #10B981' : '4px solid #EF4444',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              minWidth: 300,
+              maxWidth: 400
+            }}
+          >
+            {toast.type === 'success' ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#D1FAE5', color: '#10B981', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <CheckCircle size={18} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FEE2E2', color: '#EF4444', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <AlertTriangle size={18} />
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0B1F3A' }}>
+                {toast.type === 'success' ? 'Operación exitosa' : 'Atención requerida'}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#4E6B8C', lineHeight: 1.4 }}>
+                {toast.message}
+              </p>
+            </div>
+            <button 
+              onClick={() => setToast({ ...toast, show: false })} 
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── FILA SUPERIOR ── */}
       <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div>

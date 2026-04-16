@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApi } from '../hooks/useApi';
-import { getPatients, deletePatient } from '../services/api';
+import { getPatients, getPatientById, createPatient, updatePatient, deletePatient } from '../services/api';
 import {
   Search, Plus, Eye, Pencil, Trash2,
   ChevronLeft, ChevronRight, AlertCircle, X,
   Users, UserCheck, UserX, Calendar,
-  Activity, Heart, FileText, ShieldCheck
+  Activity, Heart, FileText, ShieldCheck,
+  CheckCircle, AlertTriangle // <-- Agregados para las alertas
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -104,6 +105,20 @@ const SectionDivider = ({ icon: Icon, label }) => (
   </div>
 );
 
+function calculateAgeFromBirthdate(fechaNacimiento) {
+  if (!fechaNacimiento) return '';
+  const birth = new Date(fechaNacimiento);
+  if (Number.isNaN(birth.getTime())) return '';
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  const dayDiff = today.getDate() - birth.getDate();
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+  return age >= 0 ? age : '';
+}
+
 const PatientsPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -114,8 +129,23 @@ const PatientsPage = () => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [loadingPatient, setLoadingPatient] = useState(false);
+  
+  // Estado para el sistema de alertas personalizadas
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const toastTimer = useRef(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 4000);
+  };
   
   const initialForm = {
+    id: undefined,
     nombre:'', apellidos:'', fechaNacimiento:'', sexo:'Masculino', curp:'', ocupacion:'',
     telefono:'', email:'', direccion:'', contactoEmergencia:'', telEmergencia:'',
     tipoSangre:'O+', alergias:'', antecedentes:'', medicamentos:'',
@@ -123,18 +153,21 @@ const PatientsPage = () => {
     aseguradora:'', numPoliza:''
   };
   const [form, setForm] = useState(initialForm);
+  const calculatedAge = calculateAgeFromBirthdate(form.fechaNacimiento);
 
   const { data, loading, refetch } = useApi(() => getPatients(page, 10, search), [page, search]);
-  
   const patients = data?.pacientes || [];
 
   const handleDelete = async () => {
     if(!delTarget) return;
-    try { 
-        await deletePatient(delTarget.id); 
-        setDelTarget(null); 
-        refetch(); 
-    } catch (err) { alert('Error al eliminar paciente: ' + err.message); }
+    try {
+      await deletePatient(delTarget.id);
+      setDelTarget(null);
+      refetch();
+      showToast('Paciente eliminado correctamente.', 'success');
+    } catch (err) {
+      showToast('Error al eliminar paciente: ' + (err?.message || err), 'error');
+    }
   };
 
   const openAddPanel = () => {
@@ -143,19 +176,67 @@ const PatientsPage = () => {
     setPanelOpen(true);
   };
 
-  const openEditPanel = (p) => {
-    setForm({
+  const openEditPanel = async (p) => {
+    setLoadingPatient(true);
+    try {
+      const detail = await getPatientById(p.id);
+      setForm({
         ...initialForm,
-        id: p.id,
-        nombre: p.nombre || '',
-        apellidos: p.apellidos || '',
-        tipoSangre: p.tipo_sangre || 'O+',
-        telefono: p.telefono || '',
-        curp: p.curp || '',
-        fechaNacimiento: p.fecha_nacimiento || ''
-    });
-    setIsEditing(true);
-    setPanelOpen(true);
+        id: detail.id,
+        nombre: detail.nombre || '',
+        apellidos: detail.apellidos || '',
+        tipoSangre: detail.tipo_sangre || detail.tipoSangre || 'O+',
+        telefono: detail.telefono || '',
+        email: detail.email || '',
+        direccion: detail.direccion || '',
+        fechaNacimiento: detail.fecha_nacimiento || detail.fechaNacimiento || '',
+        sexo: detail.genero || detail.sexo || 'Masculino',
+        curp: detail.curp || '',
+        ocupacion: detail.ocupacion || '',
+        contactoEmergencia: detail.contactoEmergencia || '',
+        telEmergencia: detail.telEmergencia || '',
+        alergias: detail.alergias || '',
+        antecedentes: detail.antecedentes || '',
+        medicamentos: detail.medicamentos || '',
+        peso: detail.peso || '',
+        altura: detail.altura || '',
+        presion: detail.presion || '',
+        temp: detail.temp || '',
+        aseguradora: detail.aseguradora || '',
+        numPoliza: detail.numPoliza || '',
+      });
+      setIsEditing(true);
+      setPanelOpen(true);
+    } catch (err) {
+      showToast('No se pudo cargar el paciente para edición', 'error');
+    } finally {
+      setLoadingPatient(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!form.nombre.trim() || !form.apellidos.trim()) {
+      showToast('Nombre y apellidos son obligatorios', 'error');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      if (isEditing && form.id) {
+        await updatePatient(form.id, form);
+        showToast('Paciente actualizado correctamente.', 'success');
+      } else {
+        await createPatient(form);
+        showToast('Paciente agregado correctamente.', 'success');
+      }
+      setPanelOpen(false);
+      setForm(initialForm);
+      refetch();
+    } catch (err) {
+      showToast('Error al guardar paciente: ' + (err?.message || err), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const setField = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -184,11 +265,64 @@ const PatientsPage = () => {
     });
   }, [patients, filterStatus, search]);
 
-  const ITEMS_PER_PAGE = 10;
   const totalPages = data?.paginas || 1;
 
   return (
-    <div className="pts-root" style={{ display:'flex', flexDirection:'column', gap:22 }}>
+    <div className="pts-root" style={{ display:'flex', flexDirection:'column', gap:22, position: 'relative' }}>
+
+      {/* --- SISTEMA DE ALERTAS (TOAST) --- */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: 20 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            style={{
+              position: 'fixed',
+              top: 24,
+              right: 24,
+              zIndex: 9999,
+              background: '#fff',
+              padding: '14px 18px',
+              borderRadius: 14,
+              boxShadow: '0 8px 30px rgba(11,31,58,0.12)',
+              border: '1px solid #DDE6F0',
+              borderLeft: toast.type === 'success' ? '4px solid #10B981' : '4px solid #EF4444',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              minWidth: 300,
+              maxWidth: 400
+            }}
+          >
+            {toast.type === 'success' ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#D1FAE5', color: '#10B981', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <CheckCircle size={18} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FEE2E2', color: '#EF4444', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <AlertTriangle size={18} />
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0B1F3A' }}>
+                {toast.type === 'success' ? 'Operación exitosa' : 'Atención requerida'}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#4E6B8C', lineHeight: 1.4 }}>
+                {toast.message}
+              </p>
+            </div>
+            <button 
+              onClick={() => setToast({ ...toast, show: false })} 
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* --------------------------------- */}
 
       <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} style={{ display:'flex', justifyContent:'flex-end' }}>
         <button className="pts-add-btn" onClick={openAddPanel}
@@ -274,15 +408,12 @@ const PatientsPage = () => {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 20px', borderTop:'1.5px solid #DDE6F0' }}>
           <p style={{ fontSize:12, color:'#4E6B8C' }}>Mostrando <strong>{filtered.length}</strong> de <strong>{data?.total || 0}</strong> pacientes</p>
           <div style={{ display:'flex', gap:6 }}>
-            {/* BOTÓN PREV - CENTRADO */}
             <button disabled={page===1} onClick={() => setPage(p=>p-1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===1?.4:1, cursor:page===1?'not-allowed':'pointer' }}><ChevronLeft size={15} /></button>
             
-            {/* NÚMEROS DE PÁGINA - CENTRADOS */}
             {Array.from({ length: totalPages }).map((_, i) => (
                  <button key={i+1} onClick={() => setPage(i+1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, fontSize:12, fontWeight:700, border: page===i+1 ? 'none' : '1.5px solid #DDE6F0', background: page===i+1 ? '#1047A9' : '#fff', color: page===i+1 ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{i+1}</button>
             ))}
             
-            {/* BOTÓN NEXT - CENTRADO */}
             <button disabled={page===totalPages} onClick={() => setPage(p=>p+1)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===totalPages?.4:1, cursor:page===totalPages?'not-allowed':'pointer' }}><ChevronRight size={15} /></button>
           </div>
         </div>
@@ -298,7 +429,6 @@ const PatientsPage = () => {
                   <h2 style={{ fontSize:20, fontWeight:700, color:'#0B1F3A' }}>{isEditing ? 'Editar Expediente' : 'Nuevo Ingreso Hospitalario'}</h2>
                   <p style={{ fontSize:12, color:'#4E6B8C', marginTop:2 }}>Registro clínico detallado del paciente</p>
                 </div>
-                {/* BOTÓN CERRAR "X" - CENTRADO */}
                 <button onClick={() => setPanelOpen(false)} style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:0, width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer' }}><X size={18} /></button>
               </div>
 
@@ -310,6 +440,7 @@ const PatientsPage = () => {
                     <Field label="Apellidos" required><input className="pts-input-focus" name="apellidos" value={form.apellidos} onChange={setField} style={inputBase} /></Field>
                     <Field label="CURP/ID" span={1}><input className="pts-input-focus" name="curp" value={form.curp} onChange={setField} style={inputBase} placeholder="AAAA000000XXXXXX00" /></Field>
                     <Field label="Fecha Nac." required span={1}><input className="pts-input-focus" name="fechaNacimiento" type="date" value={form.fechaNacimiento} onChange={setField} style={inputBase} /></Field>
+                    <Field label="Edad" span={1}><input className="pts-input-focus" type="text" value={calculatedAge ? `${calculatedAge} años` : ''} readOnly style={{ ...inputBase, background:'#F3F4F6', cursor:'not-allowed' }} placeholder="Calculando..." /></Field>
                     <Field label="Sexo" required span={1}>
                       <select className="pts-input-focus" name="sexo" value={form.sexo} onChange={setField} style={inputBase}>
                         <option>Masculino</option><option>Femenino</option><option>Otro</option>
@@ -361,8 +492,8 @@ const PatientsPage = () => {
 
               <div style={{ padding:'20px 24px', borderTop:'1.5px solid #DDE6F0', display:'flex', gap:10, position:'sticky', bottom:0, background:'#fff' }}>
                 <button onClick={() => setPanelOpen(false)} style={{ flex:1, borderRadius:11, border:'1.5px solid #DDE6F0', padding:'12px', fontWeight:700, fontSize:13, color:'#4E6B8C', background:'#fff', cursor:'pointer' }}>Cancelar</button>
-                <button type="button" style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)' }}>
-                  {isEditing ? 'Guardar Cambios' : 'Registrar Ingreso'}
+                <button type="button" onClick={handleSave} disabled={saving} style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:saving ? 'not-allowed' : 'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)', opacity: saving ? 0.7 : 1 }}>
+                  {isEditing ? (saving ? 'Guardando...' : 'Guardar Cambios') : (saving ? 'Registrando...' : 'Registrar Ingreso')}
                 </button>
               </div>
             </motion.div>
@@ -374,12 +505,12 @@ const PatientsPage = () => {
         {delTarget && (
           <div style={{ position:'fixed', inset:0, zIndex:110, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(11,31,58,.45)', backdropFilter:'blur(4px)' }}>
             <motion.div initial={{ scale:.9, opacity:0 }} animate={{ scale:1, opacity:1 }} style={{ background:'#fff', borderRadius:20, padding:24, maxWidth:400, width:'90%', textAlign:'center' }}>
-              <div style={{ width:50, height:50, borderRadius:'50%', background:'#FEE2E2', color:'#DC2626', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}><AlertCircle size={24}/></div>
+              <div style={{ width:50, height:50, borderRadius:'50%', background:'#FEE2E2', color:'#EF4444', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}><AlertCircle size={24}/></div>
               <h3 style={{ fontSize:18, fontWeight:700, color:'#0B1F3A' }}>¿Eliminar registro?</h3>
               <p style={{ fontSize:14, color:'#4E6B8C', margin:'8px 0 24px' }}>Estás por eliminar al paciente <b>{delTarget.nombre}</b>.</p>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={()=>setDelTarget(null)} style={{ flex:1, padding:10, borderRadius:10, border:'1.5px solid #DDE6F0', background:'#fff', fontWeight:700, cursor:'pointer' }}>Cancelar</button>
-                <button onClick={handleDelete} style={{ flex:1, padding:10, borderRadius:10, border:'none', background:'#DC2626', color:'#fff', fontWeight:700, cursor:'pointer' }}>Eliminar</button>
+                <button onClick={handleDelete} style={{ flex:1, padding:10, borderRadius:10, border:'none', background:'#EF4444', color:'#fff', fontWeight:700, cursor:'pointer' }}>Eliminar</button>
               </div>
             </motion.div>
           </div>

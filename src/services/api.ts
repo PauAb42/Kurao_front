@@ -231,12 +231,27 @@ export const getPatientById = async (id: string | number) => {
   return mapPaciente(p);
 };
 
+function calculateAgeFromBirthdate(fechaNacimiento?: string | null) {
+  if (!fechaNacimiento) return undefined;
+  const birth = new Date(fechaNacimiento);
+  if (Number.isNaN(birth.getTime())) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  const dayDiff = today.getDate() - birth.getDate();
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+  return age;
+}
+
 export const createPatient = async (data: any) => {
+  const fechaNacimiento = data.fechaNacimiento ?? data.fecha_nacimiento;
   const body = {
     nombre: data.nombre,
     apellido: data.apellidos ?? data.apellido,
-    fecha_nacimiento: data.fechaNacimiento ?? data.fecha_nacimiento,
-    edad: data.edad !== undefined && data.edad !== '' ? Number(data.edad) : undefined,
+    fecha_nacimiento: fechaNacimiento,
+    edad: calculateAgeFromBirthdate(fechaNacimiento),
     genero: data.sexo ?? data.genero,
     telefono: data.telefono,
     email: data.email,
@@ -248,11 +263,12 @@ export const createPatient = async (data: any) => {
 };
 
 export const updatePatient = async (id: string | number, data: any) => {
+  const fechaNacimiento = data.fechaNacimiento ?? data.fecha_nacimiento;
   const body: any = {
     nombre: data.nombre,
     apellido: data.apellidos ?? data.apellido,
-    fecha_nacimiento: data.fechaNacimiento ?? data.fecha_nacimiento,
-    edad: data.edad !== undefined && data.edad !== '' ? Number(data.edad) : undefined,
+    fecha_nacimiento: fechaNacimiento,
+    edad: calculateAgeFromBirthdate(fechaNacimiento),
     genero: data.sexo ?? data.genero,
     telefono: data.telefono,
     email: data.email,

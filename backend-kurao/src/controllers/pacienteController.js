@@ -1,5 +1,19 @@
 const pool = require('../config/database');
 
+function calculateAge(fechaNacimiento) {
+  if (!fechaNacimiento) return undefined;
+  const birth = new Date(fechaNacimiento);
+  if (Number.isNaN(birth.getTime())) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  const dayDiff = today.getDate() - birth.getDate();
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+  return age;
+}
+
 const pacienteController = {
   async list(req, res) {
     try {
@@ -72,6 +86,8 @@ const pacienteController = {
         return res.status(400).json({ error: 'Nombre y apellido son requeridos' });
       }
 
+      const computedEdad = edad !== undefined ? Number(edad) : calculateAge(fecha_nacimiento);
+
       // Generar expediente automático
       const lastExp = await pool.query(
         "SELECT expediente FROM pacientes ORDER BY id DESC LIMIT 1"
@@ -88,7 +104,7 @@ const pacienteController = {
         `INSERT INTO pacientes (expediente, nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *`,
-        [expediente, nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion]
+        [expediente, nombre, apellido, fecha_nacimiento, computedEdad, genero, telefono, email, direccion]
       );
 
       res.status(201).json(rows[0]);
@@ -102,6 +118,7 @@ const pacienteController = {
     try {
       const { id } = req.params;
       const { nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion, estado } = req.body;
+      const computedEdad = edad !== undefined ? Number(edad) : calculateAge(fecha_nacimiento);
 
       const { rows } = await pool.query(
         `UPDATE pacientes SET
@@ -117,7 +134,7 @@ const pacienteController = {
           updated_at = NOW()
          WHERE id = $10
          RETURNING *`,
-        [nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion, estado, id]
+        [nombre, apellido, fecha_nacimiento, computedEdad, genero, telefono, email, direccion, estado, id]
       );
 
       if (rows.length === 0) {

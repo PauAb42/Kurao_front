@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApi } from '../hooks/useApi';
 import { getAppointments, cancelAppointment, completeAppointment, getDoctors, getPatients, createAppointment } from '../services/api';
 import { 
   Search, Plus, ChevronLeft, ChevronRight, AlertCircle, X,
   Calendar, Clock, User, UserCheck, UserX, CheckCircle2, XCircle, 
-  FileText, Activity, HeartPulse
+  FileText, Activity, HeartPulse,
+  CheckCircle, AlertTriangle // <-- Íconos agregados para las alertas
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -121,6 +122,18 @@ const AppointmentsPage = () => {
   const [confirmCancel, setConfirmCancel] = useState(null);
   const ITEMS_PER_PAGE = 10;
 
+  // ── ESTADO Y LÓGICA DE ALERTAS ──
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const toastTimer = useRef(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 4000);
+  };
+
   // Hooks de datos
   const { data: appointmentsData, loading, refetch } = useApi(getAppointments);
   const { data: doctorsData } = useApi(getDoctors);
@@ -167,14 +180,20 @@ const AppointmentsPage = () => {
       await cancelAppointment(id);
       setConfirmCancel(null);
       refetch();
-    } catch (err) { alert("Error al cancelar cita: " + err.message); }
+      showToast('Cita cancelada correctamente.', 'success');
+    } catch (err) { 
+      showToast("Error al cancelar cita: " + (err?.message || err), 'error'); 
+    }
   };
 
   const handleComplete = async (id) => {
     try {
       await completeAppointment(id);
       refetch();
-    } catch (err) { alert("Error al completar cita: " + err.message); }
+      showToast('Cita completada con éxito.', 'success');
+    } catch (err) { 
+      showToast("Error al completar cita: " + (err?.message || err), 'error'); 
+    }
   };
 
   const setField = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -182,7 +201,7 @@ const AppointmentsPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.pacienteId || !form.medicoId || !form.fecha || !form.hora || !form.motivo) {
-        alert("Por favor completa todos los campos requeridos.");
+        showToast("Por favor completa todos los campos requeridos.", 'error');
         return;
     }
 
@@ -200,8 +219,9 @@ const AppointmentsPage = () => {
         setForm(initialForm);
         setFilterStatus('Todas'); // Resetear filtro para ver la nueva cita
         refetch();
+        showToast('Cita agendada correctamente.', 'success');
     } catch (err) {
-        alert("Error al crear la cita.");
+        showToast("Error al crear la cita.", 'error');
     } finally {
         setIsSubmitting(false);
     }
@@ -213,8 +233,61 @@ const AppointmentsPage = () => {
   };
 
   return (
-    <div className="apt-root" style={{ display:'flex', flexDirection:'column', gap:22 }}>
+    <div className="apt-root" style={{ display:'flex', flexDirection:'column', gap:22, position: 'relative' }}>
       
+      {/* ── SISTEMA DE ALERTAS (TOAST) ── */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: 20 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            style={{
+              position: 'fixed',
+              top: 24,
+              right: 24,
+              zIndex: 9999,
+              background: '#fff',
+              padding: '14px 18px',
+              borderRadius: 14,
+              boxShadow: '0 8px 30px rgba(11,31,58,0.12)',
+              border: '1px solid #DDE6F0',
+              borderLeft: toast.type === 'success' ? '4px solid #10B981' : '4px solid #EF4444',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              minWidth: 300,
+              maxWidth: 400
+            }}
+          >
+            {toast.type === 'success' ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#D1FAE5', color: '#10B981', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <CheckCircle size={18} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FEE2E2', color: '#EF4444', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+                <AlertTriangle size={18} />
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0B1F3A' }}>
+                {toast.type === 'success' ? 'Operación exitosa' : 'Atención requerida'}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#4E6B8C', lineHeight: 1.4 }}>
+                {toast.message}
+              </p>
+            </div>
+            <button 
+              onClick={() => setToast({ ...toast, show: false })} 
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── FILA SUPERIOR ── */}
       <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div>
@@ -304,11 +377,11 @@ const AppointmentsPage = () => {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 20px', borderTop:'1.5px solid #DDE6F0' }}>
           <p style={{ fontSize:12, color:'#4E6B8C' }}>Mostrando <strong>{paginatedData.length}</strong> de <strong>{filtered.length}</strong> citas</p>
           <div style={{ display:'flex', gap:6 }}>
-            <button disabled={page===1} onClick={() => setPage(p=>p-1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===1?.4:1, cursor:page===1?'not-allowed':'pointer' }}><ChevronLeft size={15} /></button>
+            <button disabled={page===1} onClick={() => setPage(p=>p-1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===1?.4:1, cursor:page===1?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}><ChevronLeft size={15} /></button>
             {Array.from({ length: totalPages }).map((_, i) => (
-                 <button key={i+1} onClick={() => setPage(i+1)} style={{ width:32, height:32, borderRadius:8, fontSize:12, fontWeight:700, border: page===i+1 ? 'none' : '1.5px solid #DDE6F0', background: page===i+1 ? '#1047A9' : '#fff', color: page===i+1 ? '#fff' : '#4E6B8C', cursor:'pointer' }}>{i+1}</button>
+                 <button key={i+1} onClick={() => setPage(i+1)} style={{ width:32, height:32, borderRadius:8, fontSize:12, fontWeight:700, border: page===i+1 ? 'none' : '1.5px solid #DDE6F0', background: page===i+1 ? '#1047A9' : '#fff', color: page===i+1 ? '#fff' : '#4E6B8C', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>{i+1}</button>
             ))}
-            <button disabled={page===totalPages} onClick={() => setPage(p=>p+1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===totalPages?.4:1, cursor:page===totalPages?'not-allowed':'pointer' }}><ChevronRight size={15} /></button>
+            <button disabled={page===totalPages} onClick={() => setPage(p=>p+1)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', opacity:page===totalPages?.4:1, cursor:page===totalPages?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}><ChevronRight size={15} /></button>
           </div>
         </div>
       </motion.div>
@@ -368,7 +441,7 @@ const AppointmentsPage = () => {
 
               <div style={{ padding:'20px 24px', borderTop:'1.5px solid #DDE6F0', display:'flex', gap:10, position:'sticky', bottom:0, background:'#fff' }}>
                 <button type="button" onClick={() => setPanelOpen(false)} style={{ flex:1, borderRadius:11, border:'1.5px solid #DDE6F0', padding:'12px', fontWeight:700, fontSize:13, color:'#4E6B8C', background:'#fff', cursor:'pointer' }}>Cancelar</button>
-                <button type="submit" form="appointment-form" disabled={isSubmitting} style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)', opacity: isSubmitting ? 0.7 : 1 }}>
+                <button type="submit" form="appointment-form" disabled={isSubmitting} style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:isSubmitting ? 'not-allowed' : 'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)', opacity: isSubmitting ? 0.7 : 1 }}>
                   {isSubmitting ? 'Guardando...' : 'Confirmar Cita'}
                 </button>
               </div>
