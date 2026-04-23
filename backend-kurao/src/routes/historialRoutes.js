@@ -72,6 +72,43 @@ router.get('/paciente/:pacienteId', requireAuth, historialController.getByPacien
  *       201:
  *         description: Registro de historial creado
  */
+router.get('/:id', requireAuth, historialController.getById);
+
 router.post('/', requireAuth, requireRole('admin', 'medico'), historialController.create);
+
+/**
+ * @swagger
+ * /historial/{id}:
+ *   put:
+ *     summary: Actualizar registro del historial clínico
+ *     tags: [Historial Clínico]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               medico_id:
+ *                 type: integer
+ *               fecha:
+ *                 type: string
+ *                 format: date
+ *               diagnostico:
+ *                 type: string
+ *               tratamiento:
+ *                 type: string
+ *               observaciones:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Registro actualizado
+ */
+router.put('/:id', requireAuth, requireRole('admin', 'medico'), historialController.update);
 
 module.exports = router;

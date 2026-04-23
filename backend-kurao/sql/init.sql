@@ -46,7 +46,21 @@ CREATE TABLE IF NOT EXISTS pacientes (
   estado VARCHAR(20) DEFAULT 'Activo' CHECK (estado IN ('Activo', 'Inactivo')),
   ultima_visita DATE,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+  curp VARCHAR(18),
+  ocupacion VARCHAR(100),
+  contacto_emergencia VARCHAR(100),
+  tel_emergencia VARCHAR(20),
+  tipo_sangre VARCHAR(5),
+  alergias TEXT,
+  antecedentes TEXT,
+  medicamentos TEXT,
+  peso NUMERIC(5,2),
+  altura NUMERIC(5,2),
+  presion VARCHAR(20),
+  temp NUMERIC(4,1),
+  sexo VARCHAR(20),
+  notas TEXT
 );
 
 CREATE TABLE IF NOT EXISTS medicos (
@@ -59,6 +73,7 @@ CREATE TABLE IF NOT EXISTS medicos (
   telefono VARCHAR(20),
   email VARCHAR(150),
   horario JSONB DEFAULT '{}',
+  consultorio VARCHAR(20),
   activo BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
@@ -84,6 +99,7 @@ CREATE TABLE IF NOT EXISTS historial_clinico (
   fecha DATE NOT NULL,
   diagnostico TEXT NOT NULL,
   tratamiento TEXT,
+  medicamentos TEXT,
   observaciones TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -117,9 +133,14 @@ CREATE INDEX IF NOT EXISTS idx_historial_paciente ON historial_clinico(paciente_
 -- =============================================
 
 -- Admin: admin@kurao.com / admin123
+-- Tester: tester@kurao.com / test
 -- Hash generado con bcryptjs (10 rounds)
 INSERT INTO usuarios (nombre, email, password_hash, rol, telefono, direccion) VALUES
   ('Admin Kurao', 'admin@kurao.com', '$2b$10$pGNd/mwNrZGzxRPA2ty4XuR9jSwJ4jbBu.FHAEXu1SMNVlm1j8v..', 'admin', '555-0123', 'Ciudad de México, México')
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES
+  ('Tester', 'tester@kurao.com', '$2b$10$s0K4xZwgTBa5eXVIG/H4C.zUL/b7HKrFrPifr5jd2T7alLG.75bY2', 'admin')
 ON CONFLICT (email) DO NOTHING;
 
 -- Usuarios médicos

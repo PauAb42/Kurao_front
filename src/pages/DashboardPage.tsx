@@ -437,8 +437,8 @@ const DashboardPage = () => {
           </>
         ) : (
           <>
-            <StatCard title={isDoctor ? 'Mis Pacientes' : 'Total Pacientes'} value={isDoctor ? '85' : stats.totalPatients} icon={Users} accent="blue" trend="up" trendValue="+12%" delay={.1} subtitle="Registros activos" />
-            <StatCard title="Citas Hoy" value={isDoctor ? '8' : stats.appointmentsToday} icon={Calendar} accent="mint" trend="up" trendValue="+5%" delay={.2} subtitle={`${new Date().toLocaleDateString('es-MX',{day:'numeric',month:'short'})}`} />
+            <StatCard title={isDoctor ? 'Mis Pacientes' : 'Total Pacientes'} value={stats.totalPatients} icon={Users} accent="blue" trend="up" trendValue="+12%" delay={.1} subtitle="Registros activos" />
+            <StatCard title="Citas Hoy" value={stats.appointmentsToday} icon={Calendar} accent="mint" trend="up" trendValue="+5%" delay={.2} subtitle={`${new Date().toLocaleDateString('es-MX',{day:'numeric',month:'short'})}`} />
             <StatCard title="Médicos Activos" value={stats.activeDoctors} icon={Stethoscope} accent="purple" trend="down" trendValue="-2%" delay={.3} subtitle="En servicio" />
             <StatCard title="Citas Pendientes" value={stats.pendingAppointments} icon={Clock} accent="amber" trend="up" trendValue="+8%" delay={.4} subtitle="Requieren atención" />
           </>

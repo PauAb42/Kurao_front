@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApi } from '../hooks/useApi';
-import { getDoctors, getDoctorById, deleteDoctor, createDoctor, updateDoctor } from '../services/api';
+import { getDoctors, getDoctorById, deleteDoctor, createDoctor, updateDoctor, getAppointments } from '../services/api';
 import {
   Search, Plus, Eye, Pencil, Trash2,
   ChevronLeft, ChevronRight, AlertCircle, X,
@@ -106,8 +106,11 @@ const SectionDivider = ({ icon: Icon, label }) => (
 );
 
 const DoctorsPage = () => {
-  const { data, loading, error, refresh } = useApi(getDoctors);
+  const { data, loading, error, refetch } = useApi(getDoctors);
   const doctors = Array.isArray(data) ? data : [];
+  const { data: appointmentsData } = useApi(() => getAppointments({}), []);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const citasHoy = (appointmentsData?.appointments || []).filter((a: any) => a.fecha === todayStr).length;
   
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -196,7 +199,7 @@ const DoctorsPage = () => {
     if (!delTarget) return;
     try {
       await deleteDoctor(delTarget.id);
-      refresh();
+      refetch();
       setDelTarget(null);
       showToast('Médico eliminado correctamente.', 'success');
     } catch (err) {
@@ -221,7 +224,7 @@ const DoctorsPage = () => {
       }
       setPanelOpen(false);
       setForm(initialForm);
-      refresh();
+      refetch();
     } catch (err) {
       showToast('Error al guardar médico: ' + (err?.message || err), 'error');
     } finally {
@@ -303,7 +306,7 @@ const DoctorsPage = () => {
         <MiniStat icon={Stethoscope} label="Total Médicos" value={doctors.length} bg="#EEF3FA" color="#1047A9" delay={.07} />
         <MiniStat icon={UserCheck} label="En Turno" value={doctors.filter(d=>d.estado==='Activo').length} bg="#D1FAF3" color="#00A88D" delay={.13} />
         <MiniStat icon={Award} label="Especialidades" value={[...new Set(doctors.map(d => d.especialidad))].length} bg="#FEF3C7" color="#D97706" delay={.19} />
-        <MiniStat icon={Calendar} label="Consultas Hoy" value="--" bg="#F3E8FF" color="#7C3AED" delay={.25} />
+        <MiniStat icon={Calendar} label="Consultas Hoy" value={citasHoy} bg="#F3E8FF" color="#7C3AED" delay={.25} />
       </div>
 
       {/* ── TABLA DE MÉDICOS ── */}

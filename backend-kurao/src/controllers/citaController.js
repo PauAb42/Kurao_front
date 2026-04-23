@@ -3,7 +3,7 @@ const pool = require('../config/database');
 const citaController = {
   async list(req, res) {
     try {
-      const { q = '', estado = '' } = req.query;
+      const { q = '', estado = '', paciente_id = '' } = req.query;
 
       let whereClause = 'WHERE 1=1';
       const params = [];
@@ -16,6 +16,11 @@ const citaController = {
       if (estado) {
         params.push(estado);
         whereClause += ` AND c.estado = $${params.length}`;
+      }
+
+      if (paciente_id) {
+        params.push(paciente_id);
+        whereClause += ` AND c.paciente_id = $${params.length}`;
       }
 
       const { rows } = await pool.query(

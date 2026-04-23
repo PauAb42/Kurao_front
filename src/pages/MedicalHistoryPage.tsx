@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Search, ClipboardList, Plus, Calendar, ChevronRight, X, User, Activity, FileText, Stethoscope, ChevronUp, ChevronDown, Pill, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Search, ClipboardList, Plus, Calendar, ChevronRight, X, User, Activity, FileText, Stethoscope, ChevronUp, ChevronDown, Pill, CheckCircle, AlertTriangle, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
-import { getPatients, getMedicalHistory, createMedicalRecord, getDoctors } from '../services/api';
+import { getPatients, getMedicalHistory, getMedicalRecordById, createMedicalRecord, updateMedicalRecord, getDoctors } from '../services/api';
 
 /* ── Estilos Globales e Inyectados ── */
 const STYLES = `
@@ -64,7 +64,11 @@ const MedicalHistoryPage = () => {
   } : null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [loadingRecord, setLoadingRecord] = useState(false);
   const [expandedRecord, setExpandedRecord] = useState(null); // Estado para el acordeón
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // ── ESTADO Y LÓGICA DE ALERTAS ──
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -79,15 +83,15 @@ const MedicalHistoryPage = () => {
   };
 
   // Formularios
-  const initialForm = { medicoId: '', fecha: new Date().toISOString().split('T')[0], diagnostico: '', tratamiento: '', observaciones: '' };
+  const initialForm = { medicoId: '', fecha: new Date().toISOString().split('T')[0], diagnostico: '', tratamiento: '', medicamentos: '', observaciones: '' };
   const [form, setForm] = useState(initialForm);
 
   // API Hooks
   const { data: patientsData } = useApi(getPatients);
   const { data: doctorsData } = useApi(getDoctors);
-  const { data: historyData, loading: loadingHistory, refetch } = useApi(
-    () => selectedPatient ? getMedicalHistory(selectedPatient.id) : Promise.resolve([]), 
-    [selectedPatient]
+  const { data: historyData, loading: loadingHistory } = useApi(
+    () => selectedPatient ? getMedicalHistory(selectedPatient.id) : Promise.resolve([]),
+    [selectedPatient, refreshKey]
   );
 
   const patients = patientsData?.pacientes || [];
@@ -116,20 +120,59 @@ const MedicalHistoryPage = () => {
 
     setIsSubmitting(true);
     try {
-        const doc = doctors.find(d => d.id === Number(form.medicoId));
-        await createMedicalRecord(selectedPatient.id, {
-            ...form,
-            medico: `Dr. ${doc.nombre} ${doc.apellidos}`,
-            especialidad: doc.especialidad
-        });
+        if (isEditing && editingId) {
+            await updateMedicalRecord(editingId, {
+                medico_id: Number(form.medicoId),
+                fecha: form.fecha,
+                diagnostico: form.diagnostico,
+                tratamiento: form.tratamiento,
+                medicamentos: form.medicamentos,
+                observaciones: form.observaciones,
+            });
+            showToast('Registro clínico actualizado correctamente.', 'success');
+        } else {
+            const doc = doctors.find(d => d.id === Number(form.medicoId));
+            await createMedicalRecord(selectedPatient.id, {
+                medicoId: form.medicoId,
+                fecha: form.fecha,
+                diagnostico: form.diagnostico,
+                tratamiento: form.tratamiento,
+                medicamentos: form.medicamentos,
+                observaciones: form.observaciones,
+            });
+            showToast('Registro clínico guardado correctamente.', 'success');
+        }
         setPanelOpen(false);
         setForm(initialForm);
-        refetch();
-        showToast('Registro clínico guardado correctamente.', 'success');
+        setIsEditing(false);
+        setEditingId(null);
+        setRefreshKey(k => k + 1);
     } catch (err) {
         showToast("Error al guardar el registro clínico: " + (err?.message || err), 'error');
     } finally {
         setIsSubmitting(false);
+    }
+  };
+
+  const openEditPanel = async (rec) => {
+    setLoadingRecord(true);
+    try {
+      const detail = await getMedicalRecordById(rec.id);
+      setForm({
+        medicoId: String(detail.medico_id || ''),
+        fecha: detail.fecha ? detail.fecha.split('T')[0] : '',
+        diagnostico: detail.diagnostico || '',
+        tratamiento: detail.tratamiento || '',
+        medicamentos: detail.medicamentos || '',
+        observaciones: detail.observaciones || '',
+      });
+      setIsEditing(true);
+      setEditingId(rec.id);
+      setPanelOpen(true);
+    } catch (err) {
+      showToast('No se pudo cargar el registro para edición.', 'error');
+    } finally {
+      setLoadingRecord(false);
     }
   };
 
@@ -311,7 +354,7 @@ const MedicalHistoryPage = () => {
                 {!isPatient && (
                   <>
                     <button onClick={() => setSelectedPatient(null)} style={{ padding:'10px 18px', borderRadius:11, border:'1.5px solid #DDE6F0', background:'#fff', fontWeight:700, fontSize:13, color:'#4E6B8C', cursor:'pointer' }}>Cerrar Expediente</button>
-                    <button onClick={() => setPanelOpen(true)} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 20px', borderRadius:11, border:'none', background:'#1047A9', fontWeight:700, fontSize:13, color:'#fff', cursor:'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)' }}>
+                    <button onClick={() => { setForm(initialForm); setIsEditing(false); setEditingId(null); setPanelOpen(true); }} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 20px', borderRadius:11, border:'none', background:'#1047A9', fontWeight:700, fontSize:13, color:'#fff', cursor:'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)' }}>
                       <Plus size={16} /> Agregar Consulta
                     </button>
                   </>
@@ -388,9 +431,20 @@ const MedicalHistoryPage = () => {
                                   </span>
                                 </div>
                               </div>
-                              <div style={{ color: '#4E6B8C', flexShrink: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                              {!isPatient && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); openEditPanel(rec); }}
+                                  style={{ width: 30, height: 30, borderRadius: 8, background: '#F5F8FC', color: '#4E6B8C', border: '1px solid #DDE6F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  title="Editar consulta"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                              )}
+                              <div style={{ color: '#4E6B8C' }}>
                                 {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                               </div>
+                            </div>
                             </div>
 
                             {/* Contenido Expandido */}
@@ -440,15 +494,15 @@ const MedicalHistoryPage = () => {
       <AnimatePresence>
         {panelOpen && (
           <div style={{ position:'fixed', inset:0, zIndex:100, display:'flex', background:'rgba(11,31,58,.45)', backdropFilter:'blur(4px)' }}>
-            <div style={{ flex:1 }} onClick={() => setPanelOpen(false)} />
+            <div style={{ flex:1 }} onClick={() => { setPanelOpen(false); setIsEditing(false); setEditingId(null); }} />
             <motion.div initial={{ x:'100%' }} animate={{ x:0 }} exit={{ x:'100%' }} transition={{ type:'spring', damping:30, stiffness:200 }} className="med-scroll" style={{ width:'100%', maxWidth:550, height:'100%', background:'#fff', display:'flex', flexDirection:'column', overflowY:'auto' }}>
               
               <div style={{ padding:'22px 24px 18px', borderBottom:'1.5px solid #DDE6F0', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, background:'#fff', zIndex:10 }}>
                 <div>
-                  <h2 style={{ fontSize:20, fontWeight:800, color:'#0B1F3A', margin:0 }}>Registrar Consulta</h2>
-                  <p style={{ fontSize:12, color:'#4E6B8C', marginTop:2 }}>Agrega un nuevo registro al historial clínico.</p>
+                  <h2 style={{ fontSize:20, fontWeight:800, color:'#0B1F3A', margin:0 }}>{isEditing ? 'Editar Consulta' : 'Registrar Consulta'}</h2>
+                  <p style={{ fontSize:12, color:'#4E6B8C', marginTop:2 }}>{isEditing ? 'Modifica los datos de la consulta existente.' : 'Agrega un nuevo registro al historial clínico.'}</p>
                 </div>
-                <button onClick={() => setPanelOpen(false)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#4E6B8C' }}><X size={18} /></button>
+                <button onClick={() => { setPanelOpen(false); setIsEditing(false); setEditingId(null); }} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#4E6B8C' }}><X size={18} /></button>
               </div>
 
               <div style={{ padding:'24px', display:'flex', flexDirection:'column', gap:32, flex:1 }}>
@@ -479,7 +533,7 @@ const MedicalHistoryPage = () => {
                         <textarea className="med-input-focus" required name="tratamiento" value={form.tratamiento} onChange={setField} placeholder="Indicaciones, reposo, dieta..." style={{ ...inputBase, minHeight:70, resize:'none' }} />
                       </Field>
                       <Field label="Medicamentos / Receta">
-                        <textarea className="med-input-focus" name="medicamentos" onChange={(e) => setForm(f => ({ ...f, medicamentos: e.target.value }))} placeholder="Fármaco, dosis y duración..." style={{ ...inputBase, minHeight:70, resize:'none' }} />
+                        <textarea className="med-input-focus" name="medicamentos" value={form.medicamentos} onChange={setField} placeholder="Fármaco, dosis y duración..." style={{ ...inputBase, minHeight:70, resize:'none' }} />
                       </Field>
                     </div>
                   </section>
@@ -495,9 +549,9 @@ const MedicalHistoryPage = () => {
               </div>
 
               <div style={{ padding:'20px 24px', borderTop:'1.5px solid #DDE6F0', display:'flex', gap:10, position:'sticky', bottom:0, background:'#fff' }}>
-                <button type="button" onClick={() => setPanelOpen(false)} style={{ flex:1, borderRadius:11, border:'1.5px solid #DDE6F0', padding:'12px', fontWeight:700, fontSize:13, color:'#4E6B8C', background:'#fff', cursor:'pointer' }}>Cancelar</button>
+                <button type="button" onClick={() => { setPanelOpen(false); setIsEditing(false); setEditingId(null); }} style={{ flex:1, borderRadius:11, border:'1.5px solid #DDE6F0', padding:'12px', fontWeight:700, fontSize:13, color:'#4E6B8C', background:'#fff', cursor:'pointer' }}>Cancelar</button>
                 <button type="submit" form="history-form" disabled={isSubmitting} style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)', opacity: isSubmitting ? 0.7 : 1 }}>
-                  {isSubmitting ? 'Guardando...' : 'Guardar Registro'}
+                  {isSubmitting ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Guardar Registro')}
                 </button>
               </div>
 

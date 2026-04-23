@@ -36,7 +36,7 @@ const pacienteController = {
 
       const dataParams = [...params, limit, offset];
       const { rows } = await pool.query(
-        `SELECT id, expediente, nombre, apellido, edad, telefono, ultima_visita, estado
+        `SELECT id, expediente, nombre, apellido, edad, telefono, ultima_visita, estado, tipo_sangre
          FROM pacientes ${whereClause}
          ORDER BY id ASC
          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -80,7 +80,11 @@ const pacienteController = {
 
   async create(req, res) {
     try {
-      const { nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion } = req.body;
+      const {
+        nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion,
+        curp, ocupacion, contacto_emergencia, tel_emergencia, tipo_sangre,
+        alergias, antecedentes, medicamentos, peso, altura, presion, temp
+      } = req.body;
 
       if (!nombre || !apellido) {
         return res.status(400).json({ error: 'Nombre y apellido son requeridos' });
@@ -101,10 +105,13 @@ const pacienteController = {
       const expediente = `EXP-${String(nextNum).padStart(3, '0')}`;
 
       const { rows } = await pool.query(
-        `INSERT INTO pacientes (expediente, nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO pacientes (expediente, nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion,
+         curp, ocupacion, contacto_emergencia, tel_emergencia, tipo_sangre, alergias, antecedentes, medicamentos, peso, altura, presion, temp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
          RETURNING *`,
-        [expediente, nombre, apellido, fecha_nacimiento, computedEdad, genero, telefono, email, direccion]
+        [expediente, nombre, apellido, fecha_nacimiento, computedEdad, genero, telefono, email, direccion,
+         curp, ocupacion, contacto_emergencia, tel_emergencia, tipo_sangre, alergias, antecedentes, medicamentos,
+         peso || null, altura || null, presion, temp || null]
       );
 
       res.status(201).json(rows[0]);
@@ -117,7 +124,11 @@ const pacienteController = {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion, estado } = req.body;
+      const {
+        nombre, apellido, fecha_nacimiento, edad, genero, telefono, email, direccion, estado,
+        curp, ocupacion, contacto_emergencia, tel_emergencia, tipo_sangre,
+        alergias, antecedentes, medicamentos, peso, altura, presion, temp, notas
+      } = req.body;
       const computedEdad = edad !== undefined ? Number(edad) : calculateAge(fecha_nacimiento);
 
       const { rows } = await pool.query(
@@ -131,10 +142,29 @@ const pacienteController = {
           email = COALESCE($7, email),
           direccion = COALESCE($8, direccion),
           estado = COALESCE($9, estado),
+          curp = COALESCE($10, curp),
+          ocupacion = COALESCE($11, ocupacion),
+          contacto_emergencia = COALESCE($12, contacto_emergencia),
+          tel_emergencia = COALESCE($13, tel_emergencia),
+          tipo_sangre = COALESCE($14, tipo_sangre),
+          alergias = COALESCE($15, alergias),
+          antecedentes = COALESCE($16, antecedentes),
+          medicamentos = COALESCE($17, medicamentos),
+          peso = COALESCE($18, peso),
+          altura = COALESCE($19, altura),
+          presion = COALESCE($20, presion),
+          temp = COALESCE($21, temp),
+          notas = COALESCE($22, notas),
           updated_at = NOW()
-         WHERE id = $10
+         WHERE id = $23
          RETURNING *`,
-        [nombre, apellido, fecha_nacimiento, computedEdad, genero, telefono, email, direccion, estado, id]
+        [nombre, apellido, fecha_nacimiento, computedEdad, genero, telefono, email, direccion, estado,
+         curp, ocupacion, contacto_emergencia, tel_emergencia, tipo_sangre,
+         alergias, antecedentes, medicamentos,
+         peso !== undefined && peso !== '' ? peso : null,
+         altura !== undefined && altura !== '' ? altura : null,
+         presion, temp !== undefined && temp !== '' ? temp : null,
+         notas, id]
       );
 
       if (rows.length === 0) {

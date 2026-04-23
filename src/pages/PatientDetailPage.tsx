@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
 import {
   getPatientById,
   getMedicalHistory,
   getAppointments,
-  updatePatient
+  updatePatient,
+  createAppointment,
+  createMedicalRecord,
+  getDoctors
 } from '../services/api';
 import {
   ChevronLeft, User, Calendar, ClipboardList, Pencil,
@@ -443,6 +447,8 @@ const generatePDF = async (patient, history, appointments) => {
 ═══════════════════════════════════════════════ */
 const PatientDetailPage = () => {
   const { id } = useParams();
+  const { user } = useAuth();
+  const canCreateHistory = user?.role === 'admin' || user?.role === 'doctor';
   const [activeTab, setActiveTab]       = useState('general');
   const [editPanelOpen, setEditOpen]    = useState(false);
   const [modalType, setModalType]       = useState(null);
@@ -450,10 +456,20 @@ const PatientDetailPage = () => {
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [pdfState, setPdfState]         = useState('idle');
   const [expandedRecord, setExpanded]   = useState(null);
+  const [toast, setToast]               = useState({ show: false, message: '', type: 'success' });
+  const toastTimer = useRef(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 4000);
+  };
 
   const { data: patient,        loading: loadingPt, refetch: refetchPt }  = useApi(() => getPatientById(id), [id]);
   const { data: historyData,     refetch: refetchHistory }                 = useApi(() => getMedicalHistory(id), [id]);
   const { data: appointmentsData, refetch: refetchApts }                   = useApi(() => getAppointments({ patientId: id }), [id]);
+  const { data: doctorsData }                                              = useApi(() => getDoctors(), []);
+  const doctors = Array.isArray(doctorsData) ? doctorsData : [];
 
   /* ── MOCK DATA SIMULADA PARA PREVISUALIZACIÓN COMPLETA ── */
   const mockPatientFallback = {
@@ -496,7 +512,7 @@ const PatientDetailPage = () => {
     id_medico: '', fecha_cita: '', hora_cita: '', motivo: '', estado: 'Programada',
   });
   const [historyForm, setHistoryForm] = useState({
-    id_cita: '', diagnostico: '', tratamiento: '', medicamentos: '', notas: '', proxima_cita: '',
+    id_cita: '', medico_id: '', fecha: new Date().toISOString().split('T')[0], diagnostico: '', tratamiento: '', medicamentos: '', notas: '', proxima_cita: '',
   });
 
   useEffect(() => {
@@ -552,12 +568,47 @@ const PatientDetailPage = () => {
   };
 
   const handleActionSubmit = async (type) => {
+    if (type === 'cita') {
+      if (!appointmentForm.id_medico || !appointmentForm.fecha_cita || !appointmentForm.hora_cita || !appointmentForm.motivo) {
+        showToast('Por favor completa todos los campos requeridos.', 'error');
+        return;
+      }
+    } else {
+      if (!historyForm.medico_id || !historyForm.fecha || !historyForm.diagnostico) {
+        showToast('Médico, fecha y diagnóstico son requeridos.', 'error');
+        return;
+      }
+    }
     setIsSaving(true);
     try {
-      console.log(`Enviando (${type}):`, type === 'cita' ? appointmentForm : historyForm);
+      if (type === 'cita') {
+        await createAppointment({
+          paciente_id: Number(id),
+          medico_id: Number(appointmentForm.id_medico),
+          fecha: appointmentForm.fecha_cita,
+          hora: appointmentForm.hora_cita,
+          motivo: appointmentForm.motivo,
+        });
+        showToast('Cita agendada correctamente.', 'success');
+      } else {
+        await createMedicalRecord(id, {
+          medicoId: Number(historyForm.medico_id),
+          fecha: historyForm.fecha,
+          diagnostico: historyForm.diagnostico,
+          tratamiento: historyForm.tratamiento,
+          medicamentos: historyForm.medicamentos,
+          observaciones: historyForm.notas,
+        });
+        showToast('Consulta registrada correctamente.', 'success');
+      }
       setModalType(null);
+      setAppointmentForm({ id_medico: '', fecha_cita: '', hora_cita: '', motivo: '', estado: 'Programada' });
+      setHistoryForm({ id_cita: '', medico_id: '', fecha: new Date().toISOString().split('T')[0], diagnostico: '', tratamiento: '', medicamentos: '', notas: '', proxima_cita: '' });
       type === 'cita' ? refetchApts() : refetchHistory();
-    } catch (err) { console.error(err); } finally { setIsSaving(false); }
+    } catch (err) {
+      console.error(err);
+      showToast(err?.message || (type === 'cita' ? 'Error al crear la cita.' : 'Error al registrar la consulta.'), 'error');
+    } finally { setIsSaving(false); }
   };
 
   const handleDownloadPDF = async () => {
@@ -583,11 +634,39 @@ const PatientDetailPage = () => {
     { id: 'historial', label: 'Historial Clínico',   icon: ClipboardList },
   ];
 
-  /* Opciones de citas para el select del modal de consulta */
-  const citaOptions = displayApts.filter(a => a.estado === 'Completada');
+
 
   return (
-    <div className="pd-root" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="pd-root" style={{ display: 'flex', flexDirection: 'column', gap: 20, position: 'relative' }}>
+
+      {/* ── TOAST ── */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: 20 }} animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            style={{
+              position: 'fixed', top: 24, right: 24, zIndex: 9999,
+              background: '#fff', padding: '14px 18px', borderRadius: 14,
+              boxShadow: '0 8px 30px rgba(11,31,58,0.12)', border: '1px solid #DDE6F0',
+              borderLeft: toast.type === 'success' ? '4px solid #10B981' : '4px solid #EF4444',
+              display: 'flex', alignItems: 'center', gap: 12, minWidth: 300, maxWidth: 400
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: toast.type === 'success' ? '#D1FAE5' : '#FEE2E2', color: toast.type === 'success' ? '#10B981' : '#EF4444', width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }}>
+              {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0B1F3A' }}>{toast.type === 'success' ? 'Operación exitosa' : 'Atención requerida'}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#4E6B8C', lineHeight: 1.4 }}>{toast.message}</p>
+            </div>
+            <button onClick={() => setToast(t => ({ ...t, show: false }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}>
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── BREADCRUMB ── */}
       <motion.div
@@ -850,15 +929,17 @@ const PatientDetailPage = () => {
                     <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0B1F3A', margin: 0 }}>Historial de Consultas</h3>
                     <p style={{ fontSize: 12, color: '#4E6B8C', marginTop: 3 }}>{displayHistory.length} consultas registradas</p>
                   </div>
-                  <button onClick={() => setModalType('consulta')} style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    background: 'linear-gradient(135deg,#1047A9,#3D6FC7)',
-                    border: 'none', borderRadius: 10, padding: '9px 16px',
-                    color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    boxShadow: '0 3px 12px rgba(16,71,169,.22)',
-                  }}>
-                    <Plus size={14} /> Registrar Consulta
-                  </button>
+                  {canCreateHistory && (
+                    <button onClick={() => setModalType('consulta')} style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      background: 'linear-gradient(135deg,#1047A9,#3D6FC7)',
+                      border: 'none', borderRadius: 10, padding: '9px 16px',
+                      color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      boxShadow: '0 3px 12px rgba(16,71,169,.22)',
+                    }}>
+                      <Plus size={14} /> Registrar Consulta
+                    </button>
+                  )}
                 </div>
 
                 {/* timeline */}
@@ -1001,9 +1082,11 @@ const PatientDetailPage = () => {
                           value={appointmentForm.id_medico}
                           onChange={e => setAppointmentForm({ ...appointmentForm, id_medico: e.target.value })}>
                           <option value="">Seleccionar médico...</option>
-                          <option value="1">Dr. Ricardo Martínez — Cardiología</option>
-                          <option value="2">Dra. Elena García — Medicina General</option>
-                          <option value="3">Dr. Luis Sánchez — Neurología</option>
+                          {doctors.map(d => (
+                            <option key={d.id} value={d.id}>
+                              Dr. {d.nombre} {d.apellidos} — {d.especialidad}
+                            </option>
+                          ))}
                         </select>
                       </Field>
                       <div className="pd-grid-2-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -1024,18 +1107,23 @@ const PatientDetailPage = () => {
                     </>
                   ) : (
                     <>
-                      {/* Vincular cita — desplegable con citas completadas */}
-                      <Field label="Vincular con Cita Existente">
+                      <Field label="Médico que atiende" required>
                         <select className="pd-input-focus" style={inputBase}
-                          value={historyForm.id_cita}
-                          onChange={e => setHistoryForm({ ...historyForm, id_cita: e.target.value })}>
-                          <option value="">Sin vincular (consulta independiente)</option>
-                          {citaOptions.map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.fecha} · {c.hora} — {c.medico} ({c.motivo})
+                          value={historyForm.medico_id}
+                          onChange={e => setHistoryForm({ ...historyForm, medico_id: e.target.value })}>
+                          <option value="">Seleccionar médico...</option>
+                          {doctors.map(d => (
+                            <option key={d.id} value={d.id}>
+                              Dr. {d.nombre} {d.apellidos} — {d.especialidad}
                             </option>
                           ))}
                         </select>
+                      </Field>
+
+                      <Field label="Fecha de la consulta" required>
+                        <input className="pd-input-focus" type="date" style={inputBase}
+                          value={historyForm.fecha}
+                          onChange={e => setHistoryForm({ ...historyForm, fecha: e.target.value })} />
                       </Field>
 
                       <Field label="Diagnóstico Clínico" required>

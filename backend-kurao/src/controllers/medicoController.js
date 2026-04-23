@@ -14,7 +14,7 @@ const medicoController = {
       }
 
       const { rows } = await pool.query(
-        `SELECT m.id, m.nombre, m.apellido, m.especialidad, m.cedula, m.telefono, m.email, m.horario, m.activo
+        `SELECT m.id, m.nombre, m.apellido, m.especialidad, m.cedula, m.telefono, m.email, m.horario, m.consultorio, m.activo
          FROM medicos m ${whereClause}
          ORDER BY m.id ASC`,
         params
@@ -63,17 +63,17 @@ const medicoController = {
 
   async create(req, res) {
     try {
-      const { nombre, apellido, especialidad, cedula, telefono, email, horario } = req.body;
+      const { nombre, apellido, especialidad, cedula, telefono, email, horario, consultorio } = req.body;
 
       if (!nombre || !apellido || !especialidad) {
         return res.status(400).json({ error: 'Nombre, apellido y especialidad son requeridos' });
       }
 
       const { rows } = await pool.query(
-        `INSERT INTO medicos (nombre, apellido, especialidad, cedula, telefono, email, horario)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO medicos (nombre, apellido, especialidad, cedula, telefono, email, horario, consultorio)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [nombre, apellido, especialidad, cedula, telefono, email, horario ? JSON.stringify(horario) : '{}']
+        [nombre, apellido, especialidad, cedula, telefono, email, horario ? JSON.stringify(horario) : '{}', consultorio || null]
       );
 
       res.status(201).json(rows[0]);
@@ -89,7 +89,7 @@ const medicoController = {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { nombre, apellido, especialidad, cedula, telefono, email, horario, activo } = req.body;
+      const { nombre, apellido, especialidad, cedula, telefono, email, horario, consultorio, activo } = req.body;
 
       const { rows } = await pool.query(
         `UPDATE medicos SET
@@ -100,11 +100,12 @@ const medicoController = {
           telefono = COALESCE($5, telefono),
           email = COALESCE($6, email),
           horario = COALESCE($7, horario),
-          activo = COALESCE($8, activo),
+          consultorio = COALESCE($8, consultorio),
+          activo = COALESCE($9, activo),
           updated_at = NOW()
-         WHERE id = $9
+         WHERE id = $10
          RETURNING *`,
-        [nombre, apellido, especialidad, cedula, telefono, email, horario ? JSON.stringify(horario) : null, activo, id]
+        [nombre, apellido, especialidad, cedula, telefono, email, horario ? JSON.stringify(horario) : null, consultorio, activo, id]
       );
 
       if (rows.length === 0) {

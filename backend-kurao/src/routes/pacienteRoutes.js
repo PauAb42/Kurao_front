@@ -31,7 +31,7 @@ const router = Router();
  *       200:
  *         description: Lista de pacientes
  */
-router.get('/', requireAuth, requireRole('admin', 'recepcionista'), pacienteController.list);
+router.get('/', requireAuth, requireRole('admin', 'recepcionista', 'medico'), pacienteController.list);
 
 /**
  * @swagger

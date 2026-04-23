@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApi } from '../hooks/useApi';
-import { getAppointments, cancelAppointment, completeAppointment, getDoctors, getPatients, createAppointment } from '../services/api';
+import { getAppointments, getAppointmentById, cancelAppointment, completeAppointment, getDoctors, getPatients, createAppointment, updateAppointment } from '../services/api';
 import { 
-  Search, Plus, ChevronLeft, ChevronRight, AlertCircle, X,
-  Calendar, Clock, User, UserCheck, UserX, CheckCircle2, XCircle, 
+  Search, Plus, ChevronLeft, ChevronRight, AlertCircle, X, Pencil,
+  Calendar, Clock, User, UserCheck, UserX, CheckCircle2, XCircle,
   FileText, Activity, HeartPulse,
-  CheckCircle, AlertTriangle // <-- Íconos agregados para las alertas
+  CheckCircle, AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -121,6 +121,7 @@ const AppointmentsPage = () => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(null);
   const ITEMS_PER_PAGE = 10;
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // ── ESTADO Y LÓGICA DE ALERTAS ──
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -135,7 +136,7 @@ const AppointmentsPage = () => {
   };
 
   // Hooks de datos
-  const { data: appointmentsData, loading, refetch } = useApi(getAppointments);
+  const { data: appointmentsData, loading } = useApi(getAppointments, [refreshKey]);
   const { data: doctorsData } = useApi(getDoctors);
   const { data: patientsData } = useApi(getPatients);
 
@@ -146,6 +147,9 @@ const AppointmentsPage = () => {
   const initialForm = { pacienteId: '', medicoId: '', fecha: '', hora: '', motivo: '' };
   const [form, setForm] = useState(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [loadingAppointment, setLoadingAppointment] = useState(false);
 
   // Filtrado
   const filtered = useMemo(() => {
@@ -179,7 +183,7 @@ const AppointmentsPage = () => {
     try {
       await cancelAppointment(id);
       setConfirmCancel(null);
-      refetch();
+      setRefreshKey(k => k + 1);
       showToast('Cita cancelada correctamente.', 'success');
     } catch (err) { 
       showToast("Error al cancelar cita: " + (err?.message || err), 'error'); 
@@ -189,7 +193,7 @@ const AppointmentsPage = () => {
   const handleComplete = async (id) => {
     try {
       await completeAppointment(id);
-      refetch();
+      setRefreshKey(k => k + 1);
       showToast('Cita completada con éxito.', 'success');
     } catch (err) { 
       showToast("Error al completar cita: " + (err?.message || err), 'error'); 
@@ -207,21 +211,33 @@ const AppointmentsPage = () => {
 
     setIsSubmitting(true);
     try {
-        await createAppointment({
-            paciente_id: Number(form.pacienteId),
-            medico_id: Number(form.medicoId),
-            fecha: form.fecha,
-            hora: form.hora,
-            motivo: form.motivo
-        });
+        if (isEditing && editingId) {
+            await updateAppointment(editingId, {
+                medico_id: Number(form.medicoId),
+                fecha: form.fecha,
+                hora: form.hora,
+                motivo: form.motivo
+            });
+            showToast('Cita actualizada correctamente.', 'success');
+        } else {
+            await createAppointment({
+                paciente_id: Number(form.pacienteId),
+                medico_id: Number(form.medicoId),
+                fecha: form.fecha,
+                hora: form.hora,
+                motivo: form.motivo
+            });
+            showToast('Cita agendada correctamente.', 'success');
+        }
 
         setPanelOpen(false);
         setForm(initialForm);
-        setFilterStatus('Todas'); // Resetear filtro para ver la nueva cita
-        refetch();
-        showToast('Cita agendada correctamente.', 'success');
+        setIsEditing(false);
+        setEditingId(null);
+        setFilterStatus('Todas');
+        setRefreshKey(k => k + 1);
     } catch (err) {
-        showToast("Error al crear la cita.", 'error');
+        showToast(isEditing ? "Error al actualizar la cita." : "Error al crear la cita.", 'error');
     } finally {
         setIsSubmitting(false);
     }
@@ -229,7 +245,30 @@ const AppointmentsPage = () => {
 
   const openAddPanel = () => {
     setForm(initialForm);
+    setIsEditing(false);
+    setEditingId(null);
     setPanelOpen(true);
+  };
+
+  const openEditPanel = async (apt) => {
+    setLoadingAppointment(true);
+    try {
+      const detail = await getAppointmentById(apt.rawId || apt.id);
+      setForm({
+        pacienteId: String(detail.paciente_id || ''),
+        medicoId: String(detail.medico_id || ''),
+        fecha: detail.fecha || '',
+        hora: detail.hora || '',
+        motivo: detail.motivo || '',
+      });
+      setIsEditing(true);
+      setEditingId(apt.rawId || apt.id);
+      setPanelOpen(true);
+    } catch (err) {
+      showToast('No se pudo cargar la cita para edición.', 'error');
+    } finally {
+      setLoadingAppointment(false);
+    }
   };
 
   return (
@@ -356,7 +395,8 @@ const AppointmentsPage = () => {
                       <div style={{ display:'flex', justifyContent:'center', gap:6 }}>
                         {apt.estado === 'Programada' ? (
                           <>
-                            <button onClick={() => handleComplete(apt.id)} className="apt-btn" style={{ width:32, height:32, borderRadius:8, background:'#D1FAE5', color:'#059669' }} title="Completar Cita"><CheckCircle2 size={16} /></button>
+                            <button onClick={() => openEditPanel(apt)} className="apt-btn" style={{ width:32, height:32, borderRadius:8, background:'#F5F8FC', color:'#4E6B8C' }} title="Editar Cita"><Pencil size={16} /></button>
+                            <button onClick={() => handleComplete(apt.rawId || apt.id)} className="apt-btn" style={{ width:32, height:32, borderRadius:8, background:'#D1FAE5', color:'#059669' }} title="Completar Cita"><CheckCircle2 size={16} /></button>
                             <button onClick={() => setConfirmCancel(apt)} className="apt-btn" style={{ width:32, height:32, borderRadius:8, background:'#FEE2E2', color:'#DC2626' }} title="Cancelar Cita"><XCircle size={16} /></button>
                           </>
                         ) : (
@@ -390,15 +430,15 @@ const AppointmentsPage = () => {
       <AnimatePresence>
         {panelOpen && (
           <div style={{ position:'fixed', inset:0, zIndex:100, display:'flex', background:'rgba(11,31,58,.45)', backdropFilter:'blur(4px)' }}>
-            <div style={{ flex:1 }} onClick={() => setPanelOpen(false)} />
+            <div style={{ flex:1 }} onClick={() => { setPanelOpen(false); setIsEditing(false); setEditingId(null); }} />
             <motion.div initial={{ x:'100%' }} animate={{ x:0 }} exit={{ x:'100%' }} transition={{ type:'spring', damping:30, stiffness:200 }} className="apt-scroll" style={{ width:'100%', maxWidth:550, height:'100%', background:'#fff', display:'flex', flexDirection:'column', overflowY:'auto' }}>
               
               <div style={{ padding:'22px 24px 18px', borderBottom:'1.5px solid #DDE6F0', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, background:'#fff', zIndex:10 }}>
                 <div>
-                  <h2 style={{ fontSize:20, fontWeight:800, color:'#0B1F3A', margin:0 }}>Agendar Nueva Cita</h2>
-                  <p style={{ fontSize:12, color:'#4E6B8C', marginTop:2 }}>Vincula a un paciente con un especialista.</p>
+                  <h2 style={{ fontSize:20, fontWeight:800, color:'#0B1F3A', margin:0 }}>{isEditing ? 'Editar Cita' : 'Agendar Nueva Cita'}</h2>
+                  <p style={{ fontSize:12, color:'#4E6B8C', marginTop:2 }}>{isEditing ? 'Modifica los datos de la cita existente.' : 'Vincula a un paciente con un especialista.'}</p>
                 </div>
-                <button onClick={() => setPanelOpen(false)} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#4E6B8C' }}><X size={18} /></button>
+                <button onClick={() => { setPanelOpen(false); setIsEditing(false); setEditingId(null); }} style={{ width:32, height:32, borderRadius:8, border:'1.5px solid #DDE6F0', background:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#4E6B8C' }}><X size={18} /></button>
               </div>
 
               <div style={{ padding:'24px', display:'flex', flexDirection:'column', gap:32, flex:1 }}>
@@ -408,7 +448,7 @@ const AppointmentsPage = () => {
                     <SectionDivider icon={User} label="Participantes" />
                     <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                       <Field label="Paciente" required>
-                        <select className="apt-input-focus" required name="pacienteId" value={form.pacienteId} onChange={setField} style={inputBase}>
+                        <select className="apt-input-focus" required name="pacienteId" value={form.pacienteId} onChange={setField} disabled={isEditing} style={{ ...inputBase, ...(isEditing ? { background: '#F3F4F6', cursor: 'not-allowed', opacity: 0.7 } : {}) }}>
                           <option value="">Selecciona un paciente...</option>
                           {patients.map(p => <option key={p.id} value={p.id}>{p.nombre} {p.apellidos} ({p.expediente})</option>)}
                         </select>
@@ -440,9 +480,9 @@ const AppointmentsPage = () => {
               </div>
 
               <div style={{ padding:'20px 24px', borderTop:'1.5px solid #DDE6F0', display:'flex', gap:10, position:'sticky', bottom:0, background:'#fff' }}>
-                <button type="button" onClick={() => setPanelOpen(false)} style={{ flex:1, borderRadius:11, border:'1.5px solid #DDE6F0', padding:'12px', fontWeight:700, fontSize:13, color:'#4E6B8C', background:'#fff', cursor:'pointer' }}>Cancelar</button>
+                <button type="button" onClick={() => { setPanelOpen(false); setIsEditing(false); setEditingId(null); }} style={{ flex:1, borderRadius:11, border:'1.5px solid #DDE6F0', padding:'12px', fontWeight:700, fontSize:13, color:'#4E6B8C', background:'#fff', cursor:'pointer' }}>Cancelar</button>
                 <button type="submit" form="appointment-form" disabled={isSubmitting} style={{ flex:2, borderRadius:11, border:'none', padding:'12px', fontWeight:700, fontSize:13, color:'#fff', background:'linear-gradient(135deg,#1047A9,#3D6FC7)', cursor:isSubmitting ? 'not-allowed' : 'pointer', boxShadow:'0 4px 14px rgba(16,71,169,.26)', opacity: isSubmitting ? 0.7 : 1 }}>
-                  {isSubmitting ? 'Guardando...' : 'Confirmar Cita'}
+                  {isSubmitting ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Confirmar Cita')}
                 </button>
               </div>
 
@@ -463,7 +503,7 @@ const AppointmentsPage = () => {
               </p>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={() => setConfirmCancel(null)} style={{ flex:1, padding:'12px', borderRadius:11, border:'1.5px solid #DDE6F0', background:'#fff', fontWeight:700, cursor:'pointer', color:'#4E6B8C' }}>Atrás</button>
-                <button onClick={() => handleCancel(confirmCancel.id)} style={{ flex:1, padding:'12px', borderRadius:11, border:'none', background:'#DC2626', color:'#fff', fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(220,38,38,.25)' }}>Sí, Cancelar</button>
+                <button onClick={() => handleCancel(confirmCancel.rawId || confirmCancel.id)} style={{ flex:1, padding:'12px', borderRadius:11, border:'none', background:'#DC2626', color:'#fff', fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(220,38,38,.25)' }}>Sí, Cancelar</button>
               </div>
             </motion.div>
           </div>

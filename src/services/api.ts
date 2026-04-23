@@ -68,6 +68,8 @@ function mapPaciente(p: any): any {
     apellidos: p.apellido,
     sexo: p.genero,
     ultimaVisita: p.ultima_visita,
+    contactoEmergencia: p.contacto_emergencia,
+    telEmergencia: p.tel_emergencia,
   };
 }
 
@@ -256,6 +258,18 @@ export const createPatient = async (data: any) => {
     telefono: data.telefono,
     email: data.email,
     direccion: data.direccion,
+    curp: data.curp,
+    ocupacion: data.ocupacion,
+    contacto_emergencia: data.contactoEmergencia ?? data.contacto_emergencia,
+    tel_emergencia: data.telEmergencia ?? data.tel_emergencia,
+    tipo_sangre: data.tipo_sangre ?? data.tipoSangre,
+    alergias: data.alergias,
+    antecedentes: data.antecedentes,
+    medicamentos: data.medicamentos,
+    peso: data.peso,
+    altura: data.altura,
+    presion: data.presion,
+    temp: data.temp,
   };
   return mapPaciente(
     await request('/pacientes', { method: 'POST', body: JSON.stringify(body) }),
@@ -274,6 +288,19 @@ export const updatePatient = async (id: string | number, data: any) => {
     email: data.email,
     direccion: data.direccion,
     estado: data.estado,
+    curp: data.curp,
+    ocupacion: data.ocupacion,
+    contacto_emergencia: data.contactoEmergencia ?? data.contacto_emergencia,
+    tel_emergencia: data.telEmergencia ?? data.tel_emergencia,
+    tipo_sangre: data.tipo_sangre ?? data.tipoSangre,
+    alergias: data.alergias,
+    antecedentes: data.antecedentes,
+    medicamentos: data.medicamentos,
+    peso: data.peso,
+    altura: data.altura,
+    presion: data.presion,
+    temp: data.temp,
+    notas: data.notas,
   };
   return mapPaciente(
     await request(`/pacientes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
@@ -313,6 +340,7 @@ export const createDoctor = async (data: any) => {
     telefono: data.telefono,
     email: data.email,
     horario: horarioFromRange(data.horarioInicio, data.horarioFin),
+    consultorio: data.consultorio,
   };
   return mapMedico(
     await request('/medicos', { method: 'POST', body: JSON.stringify(body) }),
@@ -332,6 +360,7 @@ export const updateDoctor = async (id: string | number, data: any) => {
   if (data.horarioInicio !== undefined || data.horarioFin !== undefined) {
     body.horario = horarioFromRange(data.horarioInicio, data.horarioFin);
   }
+  if (data.consultorio !== undefined) body.consultorio = data.consultorio;
   return mapMedico(
     await request(`/medicos/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   );
@@ -349,6 +378,9 @@ export const getAppointments = async (filters: any = {}) => {
     qs.set('estado', FE_TO_BE_ESTADO[filters.status] || filters.status);
   }
   if (filters?.q) qs.set('q', filters.q);
+  if (filters?.pacienteId || filters?.patientId) {
+    qs.set('paciente_id', String(filters.pacienteId || filters.patientId));
+  }
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
   const data = await request(`/citas${suffix}`);
   let mapped = (Array.isArray(data) ? data : []).map(mapCita);
@@ -424,13 +456,30 @@ export const getMedicalHistory = async (patientId: string | number) => {
     especialidad: h.medico_especialidad,
     diagnostico: h.diagnostico,
     tratamiento: h.tratamiento,
-    medicamentos: '',
+    medicamentos: h.medicamentos || '',
     observaciones: h.observaciones,
     notas: h.observaciones,
   }));
   const result: any = [...list];
   result.records = list;
   return result;
+};
+
+export const getMedicalRecordById = async (id: string | number) => {
+  const data = await request(`/historial/${id}`);
+  return data;
+};
+
+export const updateMedicalRecord = async (id: string | number, data: any) => {
+  const body: any = {};
+  if (data.medico_id !== undefined || data.medicoId !== undefined)
+    body.medico_id = Number(data.medico_id ?? data.medicoId);
+  if (data.fecha !== undefined) body.fecha = data.fecha;
+  if (data.diagnostico !== undefined) body.diagnostico = data.diagnostico;
+  if (data.tratamiento !== undefined) body.tratamiento = data.tratamiento;
+  if (data.medicamentos !== undefined) body.medicamentos = data.medicamentos;
+  if (data.observaciones !== undefined) body.observaciones = data.observaciones;
+  return request(`/historial/${id}`, { method: 'PUT', body: JSON.stringify(body) });
 };
 
 export const createMedicalRecord = async (patientId: string | number, data: any) => {
@@ -440,7 +489,8 @@ export const createMedicalRecord = async (patientId: string | number, data: any)
     fecha: data.fecha,
     diagnostico: data.diagnostico,
     tratamiento: data.tratamiento,
-    observaciones: data.observaciones ?? data.notas ?? data.medicamentos ?? '',
+    medicamentos: data.medicamentos ?? '',
+    observaciones: data.observaciones ?? data.notas ?? '',
   };
   return request('/historial', { method: 'POST', body: JSON.stringify(body) });
 };
